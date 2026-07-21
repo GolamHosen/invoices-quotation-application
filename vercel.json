@@ -4,11 +4,11 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "functions": {
-    "api/**/*.ts": {
+    "api/**/*": {
       "memory": 512,
       "maxDuration": 30
     },
-    "api/**/pdf/route.ts": {
+    "api/**/pdf/route": {
       "memory": 1024,
       "maxDuration": 60
     }
