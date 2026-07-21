@@ -3,6 +3,8 @@ node_modules/
 .pnp
 .pnp.js
 
+# Optional: Ignore all variations of environment files (e.g., .env.local, .env.development)
+.env.*
 # testing
 coverage/
 
