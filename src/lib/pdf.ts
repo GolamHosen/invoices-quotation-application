@@ -20,6 +20,16 @@ export function generateQuotationPdf(data: {
 }): TDocumentDefinitions {
   const { company, quotationNumber, issueDate, expiryDate, client, project, sections, subtotal, gstAmount, totalAmount, termsAndConditions, notes } = data;
 
+  // Register Roboto font family (bundled with pdfmake's vfs_fonts.js)
+  const fonts = {
+    Roboto: {
+      normal: "Roboto-Regular",
+      bold: "Roboto-Medium",
+      italics: "Roboto-Italic",
+      bolditalics: "Roboto-MediumItalic",
+    },
+  };
+
   const sectionTables: AnyContent[] = [];
   for (const section of sections) {
     const sectionTotal = section.items.reduce((sum, item) => sum + item.amount, 0);
@@ -184,9 +194,10 @@ export function generateQuotationPdf(data: {
     },
   ];
 
-  return {
+  const result: AnyContent = {
     pageSize: "A4",
     pageMargins: [40, 60, 40, 60],
+    fonts,
     header: (currentPage: number, pageCount: number) => ({
       columns: [
         { text: company.companyName, style: "headerCompanyName" },
@@ -236,8 +247,10 @@ export function generateQuotationPdf(data: {
     defaultStyle: {
       fontSize: 9,
       color: "#374151",
+      font: "Roboto",
     },
   };
+  return result as TDocumentDefinitions;
 }
 
 export function generateInvoicePdf(data: {
@@ -257,6 +270,16 @@ export function generateInvoicePdf(data: {
   status: string;
 }): TDocumentDefinitions {
   const { company, invoiceNumber, issueDate, dueDate, client, project, sections, subtotal, gstAmount, totalAmount, paidAmount, paymentTerms, notes, status } = data;
+
+  // Register Roboto font family (bundled with pdfmake's vfs_fonts.js)
+  const fonts = {
+    Roboto: {
+      normal: "Roboto-Regular",
+      bold: "Roboto-Medium",
+      italics: "Roboto-Italic",
+      bolditalics: "Roboto-MediumItalic",
+    },
+  };
   const balanceDue = totalAmount - paidAmount;
 
   const statusColors: Record<string, string> = {
@@ -428,9 +451,10 @@ export function generateInvoicePdf(data: {
     ] : []),
   ];
 
-  return {
+  const result: AnyContent = {
     pageSize: "A4",
     pageMargins: [40, 60, 40, 60],
+    fonts,
     header: (currentPage: number, pageCount: number) => ({
       columns: [
         { text: company.companyName, style: "headerCompanyName" },
@@ -480,6 +504,8 @@ export function generateInvoicePdf(data: {
     defaultStyle: {
       fontSize: 9,
       color: "#374151",
+      font: "Roboto",
     },
   };
+  return result as TDocumentDefinitions;
 }

@@ -64,13 +64,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       status: inv.status,
     });
 
-    // Avoid runtime failure when Roboto TTF is missing from pdfmake VFS.
-    // Use a font that is guaranteed to exist in pdfmake's bundled VFS.
-    (docDefinition as any).defaultStyle = {
-      ...(docDefinition as any).defaultStyle,
-      font: "Times-Roman",
-    };
-
     // Dynamic import for Vercel serverless compatibility
     const pdfMakeModule = await import("pdfmake/build/pdfmake.js");
     const pdfFontsModule = await import("pdfmake/build/vfs_fonts.js");
