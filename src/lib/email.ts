@@ -32,7 +32,7 @@ async function generatePdfBuffer(docDefinition: any): Promise<Buffer> {
   const pdfFontsModule = await import("pdfmake/build/vfs_fonts.js");
   const pdfMake = (pdfMakeModule.default || pdfMakeModule) as any;
   const pdfFonts = (pdfFontsModule.default || pdfFontsModule) as any;
-  pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
+  (pdfMake as any).vfs = (pdfFonts as any).pdfMake ? (pdfFonts as any).pdfMake.vfs : pdfFonts;
   const pdfDoc = pdfMake.createPdf(docDefinition);
   const buffer = await pdfDoc.getBuffer();
   return Buffer.from(buffer);

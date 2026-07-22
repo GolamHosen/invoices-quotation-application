@@ -4,13 +4,59 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "functions": {
-    "api/**/*": {
+    "src/app/api/**/route.ts": {
       "memory": 512,
       "maxDuration": 30
     },
-    "api/**/pdf/route": {
+    "src/app/api/**/pdf/route.ts": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "src/app/api/**/send-email/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/uploads/**/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "src/app/api/seed/**/route.ts": {
+      "memory": 1024,
+      "maxDuration": 120
+    },
+    "src/app/api/seed-admin/route.ts": {
+      "memory": 1024,
+      "maxDuration": 120
+    },
+    "src/app/api/migrate-companies/route.ts": {
+      "memory": 1024,
+      "maxDuration": 120
     }
-  }
+  },
+  "regions": ["iad1"],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false
 }

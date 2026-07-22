@@ -69,11 +69,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       font: "Times-Roman",
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfMake = require("pdfmake/build/pdfmake.js");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfFonts = require("pdfmake/build/vfs_fonts.js");
-    pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
+    // Dynamic import for Vercel serverless compatibility
+    const pdfMakeModule = await import("pdfmake/build/pdfmake.js");
+    const pdfFontsModule = await import("pdfmake/build/vfs_fonts.js");
+    const pdfMake = pdfMakeModule.default || pdfMakeModule;
+    const pdfFonts = pdfFontsModule.default || pdfFontsModule;
+    (pdfMake as any).vfs = (pdfFonts as any).pdfMake ? (pdfFonts as any).pdfMake.vfs : pdfFonts;
     const pdfDoc = pdfMake.createPdf(docDefinition);
 
     const buffer = await pdfDoc.getBuffer();
