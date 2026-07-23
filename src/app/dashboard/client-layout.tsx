@@ -1,5 +1,6 @@
 "use client";
-import { useState, ReactNode } from "react";
+import { useState, useTransition, ReactNode } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { CompanyProvider, useCompany } from "@/lib/company-context";
 import { Company } from "@/lib/types";
@@ -22,6 +23,7 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname();
   
@@ -45,6 +47,12 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Top loading bar for navigation transitions */}
+      {isPending && (
+        <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-blue-200">
+          <div className="h-full bg-blue-500 animate-[loading_1s_ease-in-out_infinite]" style={{ width: '60%' }} />
+        </div>
+      )}
       {/* Mobile overlay */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
       
@@ -63,10 +71,10 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
           {navItems.map(item => {
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (
-              <button key={item.href} onClick={() => { router.push(item.href); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${isActive ? "bg-white/15 text-white" : "text-blue-200 hover:bg-white/10 hover:text-white"}`}>
+              <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)} prefetch={true} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${isActive ? "bg-white/15 text-white" : "text-blue-200 hover:bg-white/10 hover:text-white"}`}>
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} /></svg>
                 {item.label}
-              </button>
+              </Link>
             );
           })}
         </nav>

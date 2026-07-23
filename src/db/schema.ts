@@ -273,6 +273,8 @@ const ClientSchema = new Schema<IClient>({
   notes: { type: String },
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
+ClientSchema.index({ companyId: 1, createdAt: -1 });
+ClientSchema.index({ companyId: 1, name: 1 });
 
 const ProjectSchema = new Schema<IProject>({
   _id: { type: String, required: true },
@@ -288,6 +290,9 @@ const ProjectSchema = new Schema<IProject>({
   clientId: { type: String, required: true },
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
+ProjectSchema.index({ companyId: 1, createdAt: -1 });
+ProjectSchema.index({ companyId: 1, clientId: 1 });
+ProjectSchema.index({ companyId: 1, status: 1 });
 
 const TemplateSchema = new Schema<ITemplate>({
   _id: { type: String, required: true },
@@ -304,6 +309,8 @@ const TemplateSchema = new Schema<ITemplate>({
   notes: { type: String },
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
+TemplateSchema.index({ companyId: 1, createdAt: -1 });
+TemplateSchema.index({ companyId: 1, projectType: 1 });
 
 const QuotationSchema = new Schema<IQuotation>({
   _id: { type: String, required: true },
@@ -324,6 +331,10 @@ const QuotationSchema = new Schema<IQuotation>({
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
 QuotationSchema.index({ companyId: 1, quotationNumber: 1 }, { unique: true });
+QuotationSchema.index({ companyId: 1, createdAt: -1 });
+QuotationSchema.index({ companyId: 1, status: 1, createdAt: -1 });
+QuotationSchema.index({ clientId: 1 });
+QuotationSchema.index({ projectId: 1 });
 
 const InvoiceSchema = new Schema<IInvoice>({
   _id: { type: String, required: true },
@@ -345,6 +356,10 @@ const InvoiceSchema = new Schema<IInvoice>({
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
 InvoiceSchema.index({ companyId: 1, invoiceNumber: 1 }, { unique: true });
+InvoiceSchema.index({ companyId: 1, createdAt: -1 });
+InvoiceSchema.index({ companyId: 1, status: 1, createdAt: -1 });
+InvoiceSchema.index({ clientId: 1 });
+InvoiceSchema.index({ projectId: 1 });
 
 const CloudinaryAssetSubSchema = new Schema<CloudinaryAsset>(
   {
@@ -392,6 +407,7 @@ const TemplateSectionOptionSchema = new Schema<ITemplateSectionOption>({
   name: { type: String, required: true, maxlength: 255 },
   sortOrder: { type: Number, default: 0 },
 }, { timestamps: true, _id: false });
+TemplateSectionOptionSchema.index({ companyId: 1, sortOrder: 1 });
 
 const AuditLogSchema = new Schema<IAuditLog>({
   _id: { type: String, required: true },
@@ -401,6 +417,7 @@ const AuditLogSchema = new Schema<IAuditLog>({
   entityId: { type: String },
   details: { type: Schema.Types.Mixed },
 }, { timestamps: true, _id: false });
+AuditLogSchema.index({ createdAt: -1 });
 
 // ===== Models =====
 

@@ -16,32 +16,21 @@ export default function SettingsPage() {
   const [addingSection, setAddingSection] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/settings?companyId=${encodeURIComponent(activeCompanyId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setSettings(d);
+    setLoading(true);
+    const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
+    Promise.all([
+      fetch(`/api/settings${param}`).then((r) => r.json()),
+      fetch(`/api/template-sections${param}`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ])
+      .then(([settingsData, sectionsData]) => {
+        setSettings(settingsData);
+        setSectionOptions(Array.isArray(sectionsData) ? sectionsData : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load settings data:", err);
         setLoading(false);
       });
-  }, [activeCompanyId]);
-
-  // Fetch template section options
-  const fetchSectionOptions = async () => {
-    try {
-      const r = await fetch(`/api/template-sections?companyId=${encodeURIComponent(activeCompanyId)}`);
-      if (r.ok) {
-        const data = await r.json();
-        setSectionOptions(data);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    if (activeCompanyId) {
-      fetchSectionOptions();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
   const handleSave = async () => {

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     if (clientId) (filter as any).clientId = clientId;
     if (quotationId) (filter as any).quotationId = quotationId;
 
-    const invoices = await Invoice.find(filter).sort({ createdAt: -1 }).lean();
+    const invoices = await Invoice.find(filter).select("-sections").sort({ createdAt: -1 }).lean();
 
     // Attach client and project names
     const clientIds = [...new Set(invoices.map(inv => inv.clientId))];

@@ -1,18 +1,32 @@
 "use client";
 import { useState, useEffect } from "react";
 import { formatCurrency, formatDate, PROJECT_TYPES } from "@/lib/utils";
+import { useCompany } from "@/lib/company-context";
 
 export default function ReportsPage() {
+  const { activeCompanyId } = useCompany();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "invoices" | "clients" | "projects">("overview");
 
   useEffect(() => {
-    Promise.all([fetch("/api/dashboard").then(r => r.json()), fetch("/api/invoices").then(r => r.json()), fetch("/api/clients").then(r => r.json()), fetch("/api/projects").then(r => r.json())])
-      .then(([dash, inv, cli, proj]) => { setData({ dashboard: dash, invoices: inv, clients: cli, projects: proj }); setLoading(false); });
-  }, []);
+    setLoading(true);
+    const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
+    Promise.all([
+      fetch(`/api/dashboard${param}`).then(r => r.json()),
+      fetch(`/api/invoices${param}`).then(r => r.json()),
+      fetch(`/api/clients${param}`).then(r => r.json()),
+      fetch(`/api/projects${param}`).then(r => r.json())
+    ]).then(([dash, inv, cli, proj]) => {
+      setData({ dashboard: dash, invoices: Array.isArray(inv) ? inv : [], clients: Array.isArray(cli) ? cli : [], projects: Array.isArray(proj) ? proj : [] });
+      setLoading(false);
+    }).catch(err => {
+      console.error("Failed loading report data:", err);
+      setLoading(false);
+    });
+  }, [activeCompanyId]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-4 border-[#1e3a5f] border-t-transparent"></div></div>;
+  if (loading || !data) return null;
 
   const { dashboard, invoices, clients, projects } = data;
 

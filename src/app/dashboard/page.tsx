@@ -71,30 +71,36 @@ async function getDashboardData(companyId: string | null) {
   
   let byCompany: any[] = [];
   if (!companyId || companyId === ALL_COMPANIES) {
-    const companies = await Company.find().lean();
-    byCompany = await Promise.all(companies.map(async (c) => {
-      const cFilter = { companyId: c._id };
-      const [tq, ti, rev, out] = await Promise.all([
-        Quotation.countDocuments(cFilter),
-        Invoice.countDocuments(cFilter),
-        Invoice.aggregate([
-          { $match: { ...cFilter, status: "paid" } },
-          { $group: { _id: null, total: { $sum: { $toDouble: "$totalAmount" } } } }
-        ]),
-        Invoice.aggregate([
-          { $match: { ...cFilter, status: { $ne: "paid" } } },
-          { $group: { _id: null, total: { $sum: { $toDouble: { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] } } } } }
-        ])
-      ]);
+    const [companies, quotationCounts, invoiceStats] = await Promise.all([
+      Company.find().lean(),
+      Quotation.aggregate([{ $group: { _id: "$companyId", total: { $sum: 1 } } }]),
+      Invoice.aggregate([
+        {
+          $group: {
+            _id: "$companyId",
+            totalInvoices: { $sum: 1 },
+            revenue: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, { $toDouble: "$totalAmount" }, 0] } },
+            outstanding: { $sum: { $cond: [{ $ne: ["$status", "paid"] }, { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] }, 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const qMap = new Map(quotationCounts.map(q => [q._id, q.total]));
+    const iMap = new Map(invoiceStats.map(i => [i._id, i]));
+
+    byCompany = companies.map(c => {
+      const cId = c._id.toString();
+      const iStat = iMap.get(cId) || { totalInvoices: 0, revenue: 0, outstanding: 0 };
       return {
-        companyId: c._id.toString(),
+        companyId: cId,
         shortName: c.shortName,
-        totalQuotations: tq,
-        totalInvoices: ti,
-        revenue: rev.length > 0 ? rev[0].total.toString() : "0",
-        outstanding: out.length > 0 ? out[0].total.toString() : "0"
+        totalQuotations: qMap.get(cId) || 0,
+        totalInvoices: iStat.totalInvoices,
+        revenue: iStat.revenue.toString(),
+        outstanding: iStat.outstanding.toString(),
       };
-    }));
+    });
   }
 
   return {

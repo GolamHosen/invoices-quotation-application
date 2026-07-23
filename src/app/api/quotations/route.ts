@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     if (status) filter.status = status;
     if (clientId) filter.clientId = clientId;
 
-    const quotations = await Quotation.find(filter).sort({ createdAt: -1 }).lean();
+    const quotations = await Quotation.find(filter).select("-sections").sort({ createdAt: -1 }).lean();
 
     // Attach client and project names
     const clientIds = [...new Set(quotations.map(q => q.clientId))];
