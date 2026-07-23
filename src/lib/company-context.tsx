@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { Company } from "./types";
 import { ALL_COMPANIES, COMPANY_COOKIE } from "./companies";
 
@@ -13,44 +13,18 @@ type CompanyContextType = {
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
-export function CompanyProvider({ children }: { children: React.ReactNode }) {
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string>(() => {
-    if (typeof document === "undefined") return ALL_COMPANIES;
-    const match = document.cookie.match(new RegExp("(^| )" + COMPANY_COOKIE + "=([^;]+)"));
-    const savedCompanyId = match ? match[2] : null;
-    return savedCompanyId || ALL_COMPANIES;
-  });
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchCompanies() {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 8000);
-
-      const startedAt = Date.now();
-      try {
-        console.log("[company-context] fetching /api/companies...");
-        const res = await fetch("/api/companies", { signal: controller.signal });
-        const elapsedMs = Date.now() - startedAt;
-        console.log(`[company-context] /api/companies responded in ${elapsedMs}ms with status ${res.status}`);
-
-        if (res.ok) {
-          const data = await res.json();
-          setCompanies(Array.isArray(data) ? data : data.companies || []);
-        } else {
-          console.error("Failed to fetch companies:", res.status, await res.text().catch(() => ""));
-        }
-      } catch (error) {
-        const elapsedMs = Date.now() - startedAt;
-        console.error(`[company-context] Failed to fetch companies after ${elapsedMs}ms:`, error);
-      } finally {
-        window.clearTimeout(timeout);
-        setIsLoading(false);
-      }
-    }
-    fetchCompanies();
-  }, []);
+export function CompanyProvider({ 
+  children,
+  initialCompanies = [],
+  initialCompanyId = ALL_COMPANIES,
+}: { 
+  children: React.ReactNode;
+  initialCompanies?: Company[];
+  initialCompanyId?: string;
+}) {
+  const [companies] = useState<Company[]>(initialCompanies);
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string>(initialCompanyId);
+  const [isLoading] = useState(false);
 
   const setActiveCompanyId = (id: string) => {
     setActiveCompanyIdState(id);

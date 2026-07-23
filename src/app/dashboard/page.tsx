@@ -1,8 +1,9 @@
-"use client";
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { useCompany } from "@/lib/company-context";
+import { formatCurrency } from "@/lib/utils";
+import { cookies } from "next/headers";
+import { COMPANY_COOKIE, ALL_COMPANIES, buildCompanyFilter } from "@/lib/companies";
+import { connectDb } from "@/db";
+import { Quotation, Invoice, Client, Company } from "@/db/schema";
 
 type Stats = { totalQuotations: number; totalInvoices: number; pendingQuotations: number; approvedQuotations: number; paidInvoices: number; unpaidInvoices: number; totalRevenue: string; outstandingAmount: string; };
 
@@ -15,41 +16,111 @@ const statCards = [
   { key: "unpaidInvoices" as const, label: "Unpaid Invoices", icon: "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-red-500", bg: "bg-red-50", href: "/dashboard/invoices?status=unpaid" },
 ];
 
-export default function DashboardPage() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const { activeCompanyId, isLoading } = useCompany();
+async function getDashboardData(companyId: string | null) {
+  await connectDb();
+  const filter = buildCompanyFilter(companyId);
 
-  useEffect(() => {
-    if (isLoading) return;
+  const [
+    totalQuotations,
+    totalInvoices,
+    pendingQuotations,
+    approvedQuotations,
+    paidInvoices,
+    unpaidInvoices,
+    revenueResult,
+    outstandingResult,
+    recentClients,
+    recentQuotations,
+    recentInvoices,
+  ] = await Promise.all([
+    Quotation.countDocuments(filter),
+    Invoice.countDocuments(filter),
+    Quotation.countDocuments({ ...filter, status: "draft" }),
+    Quotation.countDocuments({ ...filter, status: "approved" }),
+    Invoice.countDocuments({ ...filter, status: "paid" }),
+    Invoice.countDocuments({ ...filter, status: { $ne: "paid" } }),
+    Invoice.aggregate([
+      { $match: { ...filter, status: "paid" } },
+      { $group: { _id: null, total: { $sum: { $toDouble: "$totalAmount" } } } },
+    ]),
+    Invoice.aggregate([
+      { $match: { ...filter, status: { $ne: "paid" } } },
+      { $group: { _id: null, total: { $sum: { $toDouble: { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] } } } } },
+    ]),
+    Client.find(filter).sort({ createdAt: -1 }).limit(5).lean(),
+    Quotation.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
+      { $sort: { createdAt: -1 } },
+      { $limit: 5 },
+      { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
+      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+      { $project: { _id: 1, companyId: 1, quotationNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
+    ]),
+    Invoice.aggregate([
+      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
+      { $sort: { createdAt: -1 } },
+      { $limit: 5 },
+      { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
+      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+      { $project: { _id: 1, companyId: 1, invoiceNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
+    ]),
+  ]);
 
-    const startedAt = Date.now();
-    console.log(`[dashboard-page] fetching /api/dashboard?companyId=${activeCompanyId}...`);
-    fetch(`/api/dashboard?companyId=${activeCompanyId}`)
-      .then((r) => {
-        console.log(
-          `[dashboard-page] /api/dashboard responded in ${Date.now() - startedAt}ms with status ${r.status}`
-        );
-        return r.json();
-      })
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(`[dashboard-page] /api/dashboard failed after ${Date.now() - startedAt}ms:`, err);
-        setLoading(false);
-      });
-  }, [activeCompanyId, isLoading]);
+  const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total.toString() : "0";
+  const outstandingAmount = outstandingResult.length > 0 ? outstandingResult[0].total.toString() : "0";
+  
+  let byCompany: any[] = [];
+  if (!companyId || companyId === ALL_COMPANIES) {
+    const companies = await Company.find().lean();
+    byCompany = await Promise.all(companies.map(async (c) => {
+      const cFilter = { companyId: c._id };
+      const [tq, ti, rev, out] = await Promise.all([
+        Quotation.countDocuments(cFilter),
+        Invoice.countDocuments(cFilter),
+        Invoice.aggregate([
+          { $match: { ...cFilter, status: "paid" } },
+          { $group: { _id: null, total: { $sum: { $toDouble: "$totalAmount" } } } }
+        ]),
+        Invoice.aggregate([
+          { $match: { ...cFilter, status: { $ne: "paid" } } },
+          { $group: { _id: null, total: { $sum: { $toDouble: { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] } } } } }
+        ])
+      ]);
+      return {
+        companyId: c._id.toString(),
+        shortName: c.shortName,
+        totalQuotations: tq,
+        totalInvoices: ti,
+        revenue: rev.length > 0 ? rev[0].total.toString() : "0",
+        outstanding: out.length > 0 ? out[0].total.toString() : "0"
+      };
+    }));
+  }
 
-  if (loading || isLoading)
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#1e3a5f] border-t-transparent"></div>
-      </div>
-    );
+  return {
+    stats: {
+      totalQuotations,
+      totalInvoices,
+      pendingQuotations,
+      approvedQuotations,
+      paidInvoices,
+      unpaidInvoices,
+      totalRevenue,
+      outstandingAmount,
+    },
+    recentClients: recentClients.map(c => ({...c, _id: c._id.toString()})),
+    recentQuotations: recentQuotations.map(q => ({...q, _id: q._id.toString()})),
+    recentInvoices: recentInvoices.map(i => ({...i, _id: i._id.toString()})),
+    byCompany,
+  };
+}
 
-  const stats = data?.stats || {} as Stats;
+export default async function DashboardPage() {
+  const cookieStore = await cookies();
+  const activeCompanyId = cookieStore.get(COMPANY_COOKIE)?.value || ALL_COMPANIES;
+  
+  const data = await getDashboardData(activeCompanyId);
+  const stats = data.stats as Stats;
 
   return (
     <div className="space-y-6">
@@ -77,7 +148,7 @@ export default function DashboardPage() {
       </div>
       
       {/* Company Breakdown */}
-      {data?.byCompany && data.byCompany.length > 0 && (
+      {data.byCompany && data.byCompany.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.byCompany.map((c: any) => (
             <div key={c.companyId} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -126,10 +197,10 @@ export default function DashboardPage() {
             <Link href="/dashboard/quotations" className="text-sm text-blue-600 hover:text-blue-800">View all</Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {(data?.recentQuotations || []).map((q: any, index: number) => (
+            {(data.recentQuotations || []).map((q: any, index: number) => (
               <div
                 key={
-                  q.id ??
+                  q._id ??
                   q.quotationNumber ??
                   `${q.clientName ?? "client"}-${index}`
                 }
@@ -145,7 +216,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
-            {(!data?.recentQuotations?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No quotations yet</div>}
+            {(!data.recentQuotations?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No quotations yet</div>}
           </div>
         </div>
 
@@ -156,10 +227,10 @@ export default function DashboardPage() {
             <Link href="/dashboard/invoices" className="text-sm text-blue-600 hover:text-blue-800">View all</Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {(data?.recentInvoices || []).map((inv: any, index: number) => (
+            {(data.recentInvoices || []).map((inv: any, index: number) => (
               <div
                 key={
-                  inv.id ??
+                  inv._id ??
                   inv.invoiceNumber ??
                   `${inv.clientName ?? "client"}-${index}`
                 }
@@ -175,7 +246,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
-            {(!data?.recentInvoices?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No invoices yet</div>}
+            {(!data.recentInvoices?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No invoices yet</div>}
           </div>
         </div>
 
@@ -186,10 +257,10 @@ export default function DashboardPage() {
             <Link href="/dashboard/clients" className="text-sm text-blue-600 hover:text-blue-800">View all</Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {(data?.recentClients || []).map((c: any, index: number) => (
+            {(data.recentClients || []).map((c: any, index: number) => (
               <div
                 key={
-                  c.id ??
+                  c._id ??
                   c.email ??
                   c.phone ??
                   `${c.name ?? "client"}-${index}`
@@ -203,7 +274,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ))}
-            {(!data?.recentClients?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No clients yet</div>}
+            {(!data.recentClients?.length) && <div className="px-6 py-8 text-center text-gray-400 text-sm">No clients yet</div>}
           </div>
         </div>
       </div>

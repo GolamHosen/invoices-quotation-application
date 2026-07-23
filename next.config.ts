@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const nextConfig: NextConfig = {
   // Enable server-side features for Vercel serverless
@@ -44,4 +45,8 @@ const nextConfig: NextConfig = {
   generateEtags: false,
 };
 
-export default nextConfig;
+const withAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
+
+export default withAnalyzer(nextConfig);
