@@ -36,9 +36,10 @@ export default function NewInvoicePage() {
       fetch(`/api/quotations?status=approved&companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
       fetch(`/api/settings?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
     ]).then(([cl, pr, qu, st]) => {
-      setClients(cl);
-      setProjects(pr);
-      setQuotations(qu);
+      // API routes now return { data, total, page, totalPages } for paginated endpoints
+      setClients(cl.data || cl);
+      setProjects(pr.data || pr);
+      setQuotations(qu.data || qu);
       setSettings(st);
     });
   }, [activeCompanyId]);

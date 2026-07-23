@@ -35,9 +35,10 @@ export default function NewQuotationPage() {
       fetch(`/api/templates?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
       fetch(`/api/settings?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
     ]).then(([cl, pr, tl, st]) => {
-      setClients(cl);
-      setProjects(pr);
-      setTemplates(tl);
+      // API routes now return { data, total, page, totalPages } for paginated endpoints
+      setClients(cl.data || cl);
+      setProjects(pr.data || pr);
+      setTemplates(tl.data || tl);
       setSettings(st);
       if (st.defaultTerms) setForm((f) => ({ ...f, termsAndConditions: st.defaultTerms }));
     });
