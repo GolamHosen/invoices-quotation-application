@@ -11,6 +11,9 @@ export async function GET(req: NextRequest) {
     const clientId = req.nextUrl.searchParams.get("clientId");
     const companyId = req.nextUrl.searchParams.get("companyId");
     const quotationId = req.nextUrl.searchParams.get("quotationId");
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+    const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
 
     const filter: Record<string, unknown> = buildCompanyFilter(companyId);
     if (status) {
@@ -23,7 +26,10 @@ export async function GET(req: NextRequest) {
     if (clientId) (filter as any).clientId = clientId;
     if (quotationId) (filter as any).quotationId = quotationId;
 
-    const invoices = await Invoice.find(filter).select("-sections").sort({ createdAt: -1 }).lean();
+    const [invoices, total] = await Promise.all([
+      Invoice.find(filter).select("-sections").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Invoice.countDocuments(filter),
+    ]);
 
     // Attach client and project names
     const clientIds = [...new Set(invoices.map(inv => inv.clientId))];
@@ -54,7 +60,12 @@ export async function GET(req: NextRequest) {
       quotationId: inv.quotationId || null,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      data: result,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("Get invoices error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

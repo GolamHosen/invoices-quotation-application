@@ -111,6 +111,10 @@ function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, on
   );
 }
 
+import Pagination from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
+
 function QuotationsContent() {
   const searchParams = useSearchParams();
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -120,20 +124,32 @@ function QuotationsContent() {
   const [viewQuotation, setViewQuotation] = useState<any>(null);
   const [relatedInvoices, setRelatedInvoices] = useState<any[]>([]);
   const [emailModal, setEmailModal] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async () => {
+  const load = async (pageNum: number = page, status?: string) => {
     setLoading(true);
-    const url = statusFilter ? `/api/quotations?status=${statusFilter}` : "/api/quotations";
+    const filterStatus = status !== undefined ? status : statusFilter;
+    let url = `/api/quotations?page=${pageNum}&limit=${PAGE_SIZE}`;
+    if (filterStatus) url += `&status=${filterStatus}`;
     const r = await fetch(url);
-    setQuotations(await r.json());
+    const res = await r.json();
+    setQuotations(res.data || []);
+    setTotalItems(res.total || 0);
+    setTotalPages(res.totalPages || 0);
     setLoading(false);
   };
 
   useEffect(() => {
-    void (async () => {
-      await load();
-    })();
+    setPage(1);
   }, [statusFilter]);
+
+  useEffect(() => {
+    void (async () => {
+      await load(page);
+    })();
+  }, [statusFilter, page]);
 
   useEffect(() => {
     void (async () => {
@@ -215,6 +231,13 @@ function QuotationsContent() {
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+        />
       </div>
       {viewQuotation && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewQuotation(null)}>

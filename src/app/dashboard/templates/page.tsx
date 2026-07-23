@@ -7,6 +7,10 @@ import { useCompany } from "@/lib/company-context";
 type Item = { id: string; description: string; quantity: number; unit: string; rate: number };
 type Section = { id: string; name: string; items: Item[] };
 
+import Pagination from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
+
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +22,9 @@ export default function TemplatesPage() {
   const [sectionOptions, setSectionOptions] = useState<string[]>(getDefaultTemplateSectionOptions());
 
   const [editingCompanyId, setEditingCompanyId] = useState<string>("");
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -26,15 +33,18 @@ export default function TemplatesPage() {
     sections: [] as Section[],
   });
 
-  const load = async () => {
+  const load = async (pageNum: number = page) => {
     setLoading(true);
-    const r = await fetch(`/api/templates?companyId=${encodeURIComponent(activeCompanyId)}`);
+    const r = await fetch(`/api/templates?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`);
     if (!r.ok) {
       setTemplates([]);
       setLoading(false);
       return;
     }
-    setTemplates(await r.json());
+    const res = await r.json();
+    setTemplates(res.data || []);
+    setTotalItems(res.total || 0);
+    setTotalPages(res.totalPages || 0);
     setLoading(false);
   };
 
@@ -55,11 +65,14 @@ export default function TemplatesPage() {
   };
 
   useEffect(() => {
-    void (async () => {
-      await load();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPage(1);
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    void (async () => {
+      await load(page);
+    })();
+  }, [activeCompanyId, page]);
 
   useEffect(() => {
     fetchSectionOptions();
@@ -528,6 +541,13 @@ export default function TemplatesPage() {
           )}
         </div>
       )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

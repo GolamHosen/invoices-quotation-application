@@ -10,12 +10,18 @@ export async function GET(req: NextRequest) {
     const status = req.nextUrl.searchParams.get("status");
     const clientId = req.nextUrl.searchParams.get("clientId");
     const companyId = req.nextUrl.searchParams.get("companyId");
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+    const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
 
     const filter = buildCompanyFilter(companyId);
     if (status) filter.status = status;
     if (clientId) filter.clientId = clientId;
 
-    const quotations = await Quotation.find(filter).select("-sections").sort({ createdAt: -1 }).lean();
+    const [quotations, total] = await Promise.all([
+      Quotation.find(filter).select("-sections").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Quotation.countDocuments(filter),
+    ]);
 
     // Attach client and project names
     const clientIds = [...new Set(quotations.map(q => q.clientId))];
@@ -36,7 +42,12 @@ export async function GET(req: NextRequest) {
       projectName: projectMap.get(q.projectId) || null,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      data: result,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("Get quotations error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

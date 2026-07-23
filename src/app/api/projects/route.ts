@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
     const search = req.nextUrl.searchParams.get("search");
     const clientId = req.nextUrl.searchParams.get("clientId");
     const companyId = req.nextUrl.searchParams.get("companyId");
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+    const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
 
     const filter = buildCompanyFilter(companyId);
     if (search) {
@@ -20,7 +23,10 @@ export async function GET(req: NextRequest) {
       filter.clientId = clientId;
     }
 
-    const projects = await Project.find(filter).sort({ createdAt: -1 }).lean();
+    const [projects, total] = await Promise.all([
+      Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Project.countDocuments(filter),
+    ]);
     
     // Attach client names
     const clientIds = [...new Set(projects.map(p => p.clientId))];
@@ -33,7 +39,12 @@ export async function GET(req: NextRequest) {
       clientName: clientMap.get(p.clientId) || null,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      data: result,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("Get projects error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

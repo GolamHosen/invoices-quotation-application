@@ -1,22 +1,16 @@
-# Performance Optimization Progress
+# Pagination Implementation Plan
 
-## Phase 1: Install npm packages
-- [x] Install @tanstack/react-query for client-side caching
-- [x] Install lru-cache for server-side caching
+## Steps:
 
-## Phase 2: Server-side optimizations
-- [ ] Create server-side cache utility
-- [ ] Optimize dashboard API - single MongoDB aggregation pipeline (reduces 11+ queries to 1)
-- [ ] Add MongoDB indexes for common queries
-- [ ] Add server-side caching with lru-cache
-
-## Phase 3: Client-side optimizations
-- [x] Create shared SVG icon component (Icons.tsx)
-- [ ] Add React.memo/useMemo for expensive list renders
-- [ ] Parallelize API calls in layout/page components
-- [ ] Lazy load SendEmailModal with dynamic import
-- [ ] Remove window.location.reload() on company switch
-- [ ] Add React Query provider and useQuery hooks
-
-## Phase 4: Image & bundle optimizations
-- [ ] Use Next.js Image with Cloudinary transformations
+- [x] Created plan and got approval
+- [x] **Step 1:** Create `src/components/Pagination.tsx` - reusable pagination component
+- [x] **Step 2:** Update `src/app/api/clients/route.ts` - add pagination to GET endpoint
+- [x] **Step 3:** Update `src/app/api/projects/route.ts` - add pagination to GET endpoint
+- [x] **Step 4:** Update `src/app/api/templates/route.ts` - add pagination to GET endpoint
+- [x] **Step 5:** Update `src/app/api/quotations/route.ts` - add pagination to GET endpoint
+- [x] **Step 6:** Update `src/app/api/invoices/route.ts` - add pagination to GET endpoint
+- [x] **Step 7:** Update `src/app/dashboard/clients/page.tsx` - add pagination UI and logic
+- [x] **Step 8:** Update `src/app/dashboard/projects/page.tsx` - add pagination UI and logic
+- [x] **Step 9:** Update `src/app/dashboard/templates/page.tsx` - add pagination UI and logic
+- [x] **Step 10:** Update `src/app/dashboard/quotations/page.tsx` - add pagination UI and logic
+- [x] **Step 11:** Update `src/app/dashboard/invoices/page.tsx` - add pagination UI and logic

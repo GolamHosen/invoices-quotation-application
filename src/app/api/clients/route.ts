@@ -9,19 +9,28 @@ export async function GET(req: NextRequest) {
     await connectDb();
     const search = req.nextUrl.searchParams.get("search");
     const companyId = req.nextUrl.searchParams.get("companyId");
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+    const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
+
     const filter = buildCompanyFilter(companyId);
-    let result;
     if (search) {
       const regex = new RegExp(search, "i");
-      result = await Client.find({
-        ...filter,
-        $or: [{ name: regex }, { email: regex }, { companyName: regex }],
-      }).sort({ createdAt: -1 }).lean();
-    } else {
-      result = await Client.find(filter).sort({ createdAt: -1 }).lean();
+      filter.$or = [{ name: regex }, { email: regex }, { companyName: regex }];
     }
-    const formattedResult = result.map(c => ({ ...c, id: c._id }));
-    return NextResponse.json(formattedResult);
+
+    const [clients, total] = await Promise.all([
+      Client.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Client.countDocuments(filter),
+    ]);
+
+    const formattedResult = clients.map(c => ({ ...c, id: c._id }));
+    return NextResponse.json({
+      data: formattedResult,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("Get clients error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

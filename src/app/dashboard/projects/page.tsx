@@ -2,6 +2,9 @@
 import { useState, useEffect } from "react";
 import { PROJECT_TYPES, PROJECT_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
+import Pagination from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
 
 export default function ProjectsPage() {
   const { activeCompanyId } = useCompany();
@@ -12,27 +15,33 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editProject, setEditProject] = useState<any>(null);
   const [form, setForm] = useState({ name: "", address: "", type: "granny_flat" as string, status: "pending" as string, clientId: "" });
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async () => {
+  const load = async (pageNum: number = page) => {
     setLoading(true);
     try {
       const [pr, cl] = await Promise.all([
-        fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}`).then((r) => r.json()),
+        fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`).then((r) => r.json()),
         fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}`).then((r) => r.json()),
       ]);
-      setProjects(pr);
-      setClients(cl);
+      setProjects(pr.data || pr);
+      setTotalItems(pr.total || 0);
+      setTotalPages(pr.totalPages || 0);
+      setClients(cl.data || cl);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    (async () => {
-      await Promise.resolve();
-      await load();
-    })();
+    setPage(1);
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    load(page);
+  }, [activeCompanyId, page]);
 
   const openCreate = () => {
     setEditProject(null);
@@ -62,13 +71,17 @@ export default function ProjectsPage() {
       });
     }
     setShowModal(false);
-    load();
+    load(page);
   };
 
   const handleDelete = async (id: string) => {
     if (confirm("Delete this project?")) {
       await fetch(`/api/projects/${id}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
-      load();
+      if (projects.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        load(page);
+      }
     }
   };
 
@@ -107,6 +120,13 @@ export default function ProjectsPage() {
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+        />
       </div>
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>

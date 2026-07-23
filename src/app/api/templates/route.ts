@@ -9,15 +9,27 @@ export async function GET(req: NextRequest) {
     await connectDb();
     const projectType = req.nextUrl.searchParams.get("projectType");
     const companyId = req.nextUrl.searchParams.get("companyId");
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+    const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
+    const skip = (page - 1) * limit;
     
     const filter = buildCompanyFilter(companyId);
     if (projectType) {
       filter.projectType = projectType;
     }
     
-    const result = await Template.find(filter).sort({ createdAt: -1 }).lean();
-    const formattedResult = result.map(t => ({ ...t, id: t._id }));
-    return NextResponse.json(formattedResult);
+    const [templates, total] = await Promise.all([
+      Template.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Template.countDocuments(filter),
+    ]);
+    
+    const formattedResult = templates.map(t => ({ ...t, id: t._id }));
+    return NextResponse.json({
+      data: formattedResult,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (error) {
     console.error("Get templates error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

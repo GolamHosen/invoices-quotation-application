@@ -2,6 +2,9 @@
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
+import Pagination from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
 
 export default function ClientsPage() {
   const { activeCompanyId } = useCompany();
@@ -12,19 +15,34 @@ export default function ClientsPage() {
   const [editClient, setEditClient] = useState<any>(null);
   const [form, setForm] = useState({ name: "", companyName: "", phone: "", email: "", address: "", notes: "" });
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async () => {
+  const load = async (pageNum: number = page, searchTerm: string = search) => {
+    setLoading(true);
     try {
-      const r = await fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}`);
-      setClients(await r.json());
+      let url = `/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`;
+      if (searchTerm) {
+        url += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+      const r = await fetch(url);
+      const res = await r.json();
+      setClients(res.data);
+      setTotalItems(res.total);
+      setTotalPages(res.totalPages);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    setPage(1);
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    load(page, search);
+  }, [activeCompanyId, page]);
 
   const openCreate = () => { setEditClient(null); setForm({ name: "", companyName: "", phone: "", email: "", address: "", notes: "" }); setShowModal(true); };
   const openEdit = (c: any) => { setEditClient(c); setForm({ name: c.name, companyName: c.companyName || "", phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" }); setShowModal(true); };
@@ -45,7 +63,7 @@ export default function ClientsPage() {
       });
     }
     setShowModal(false);
-    load();
+    load(page);
   };
 
   const handleDelete = async (id: string) => {
@@ -53,11 +71,19 @@ export default function ClientsPage() {
       "Are you sure you want to delete this client? This action will permanently remove the client and all associated quotations, invoices, projects, documents, and records. This action cannot be undone.";
     if (confirm(message)) {
       await fetch(`/api/clients/${id}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
-      load();
+      if (clients.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        load(page);
+      }
     }
   };
 
-  const filtered = clients.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.email || "").toLowerCase().includes(search.toLowerCase()));
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+    load(1, value);
+  };
 
   return (
     <div className="space-y-6">
@@ -70,18 +96,21 @@ export default function ClientsPage() {
       </div>
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-4 border-b border-gray-100">
-          <input type="text" placeholder="Search clients..." value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-sm px-4 py-2 bg-gray-100 rounded-lg text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+          <input
+            type="text"
+            placeholder="Search clients..."
+            value={search}
+            onChange={e => handleSearchChange(e.target.value)}
+            className="w-full max-w-sm px-4 py-2 bg-gray-100 rounded-lg text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:bg-white"
+          />
         </div>
         {loading ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-gray-50"><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Name</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Company</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phone</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Email</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Address</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((c, index) => (
-                  <tr
-                    key={c.id ?? c.email ?? c.phone ?? c.name ?? `client-${index}`}
-                    className="hover:bg-gray-50"
-                  >
+                {clients.map((c: any) => (
+                  <tr key={c.id || c.email || c.phone || c.name} className="hover:bg-gray-50">
                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-9 h-9 bg-[#1e3a5f] rounded-full flex items-center justify-center text-white text-sm font-bold">{c.name.charAt(0)}</div><span className="font-medium text-gray-900">{c.name}</span></div></td>
                     <td className="px-6 py-4 text-sm text-gray-600">{c.companyName || "-"}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{c.phone || "-"}</td>
@@ -93,11 +122,18 @@ export default function ClientsPage() {
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && <tr key="empty"><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No clients found</td></tr>}
+                {clients.length === 0 && <tr key="empty"><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No clients found</td></tr>}
               </tbody>
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+        />
       </div>
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>

@@ -2,6 +2,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatCurrency, formatDate, INVOICE_STATUSES } from "@/lib/utils";
+import Pagination from "@/components/Pagination";
+
+const PAGE_SIZE = 10;
 
 function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -118,9 +121,29 @@ function InvoicesContent() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [emailModal, setEmailModal] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async () => { setLoading(true); const url = statusFilter ? `/api/invoices?status=${statusFilter}` : "/api/invoices"; const r = await fetch(url); setInvoices(await r.json()); setLoading(false); };
-  useEffect(() => { load(); }, [statusFilter]);
+  const load = async (pageNum: number = page) => {
+    setLoading(true);
+    let url = `/api/invoices?page=${pageNum}&limit=${PAGE_SIZE}`;
+    if (statusFilter) url += `&status=${statusFilter}`;
+    const r = await fetch(url);
+    const res = await r.json();
+    setInvoices(res.data || []);
+    setTotalItems(res.total || 0);
+    setTotalPages(res.totalPages || 0);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    load(page);
+  }, [statusFilter, page]);
 
   const handleStatusChange = async (id: string, status: string) => { await fetch(`/api/invoices/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); load(); };
   const handleDelete = async (id: string) => { if (confirm("Delete this invoice?")) { await fetch(`/api/invoices/${id}`, { method: "DELETE" }); load(); } };
@@ -187,6 +210,13 @@ function InvoicesContent() {
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+        />
       </div>
       {viewInvoice && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewInvoice(null)}>
