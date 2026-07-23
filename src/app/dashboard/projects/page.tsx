@@ -24,7 +24,7 @@ export default function ProjectsPage() {
     try {
       const [pr, cl] = await Promise.all([
         fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`).then((r) => r.json()),
-        fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}`).then((r) => r.json()),
+        fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then((r) => r.json()),
       ]);
       setProjects(pr.data || pr);
       setTotalItems(pr.total || 0);

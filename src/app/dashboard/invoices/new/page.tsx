@@ -30,10 +30,11 @@ export default function NewInvoicePage() {
   });
 
   useEffect(() => {
+    // Use limit=1000 to fetch all records for dropdown selections
     Promise.all([
-      fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
-      fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
-      fetch(`/api/quotations?status=approved&companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
+      fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then(r => r.json()),
+      fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then(r => r.json()),
+      fetch(`/api/quotations?status=approved&companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then(r => r.json()),
       fetch(`/api/settings?companyId=${encodeURIComponent(activeCompanyId)}`).then(r => r.json()),
     ]).then(([cl, pr, qu, st]) => {
       // API routes now return { data, total, page, totalPages } for paginated endpoints
