@@ -61,7 +61,9 @@ export default function SettingsPage() {
       });
       if (r.ok) {
         setNewSectionName("");
-        await fetchSectionOptions();
+        const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
+        const sectionsRes = await fetch(`/api/template-sections${param}`);
+        if (sectionsRes.ok) setSectionOptions(await sectionsRes.json());
       } else {
         const err = await r.json();
         alert(err.error || "Failed to add section option");
@@ -79,7 +81,9 @@ export default function SettingsPage() {
     try {
       const r = await fetch(`/api/template-sections/${id}`, { method: "DELETE" });
       if (r.ok) {
-        await fetchSectionOptions();
+        const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
+        const sectionsRes = await fetch(`/api/template-sections${param}`);
+        if (sectionsRes.ok) setSectionOptions(await sectionsRes.json());
       } else {
         alert("Failed to delete section option");
       }
