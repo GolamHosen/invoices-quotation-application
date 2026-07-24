@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition, ReactNode } from "react";
+import { useState, useTransition, useEffect, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { CompanyProvider, useCompany } from "@/lib/company-context";
@@ -29,6 +29,16 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
   
   const { companies, activeCompanyId, setActiveCompanyId } = useCompany();
 
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
     if (q.length < 2) { setSearchResults(null); setShowSearch(false); return; }
@@ -38,8 +48,12 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore network errors during logout
+    }
+    window.location.replace("/");
   };
 
   const activeCompany = companies.find(c => c.id === activeCompanyId);
@@ -83,13 +97,11 @@ function DashboardInner({ children, user }: { children: ReactNode; user: User | 
           })}
         </nav>
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold">{user?.name?.charAt(0) ?? "?"}</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-sm font-medium truncate">{user?.name ?? ""}</div>
-              <div className="text-blue-300 text-xs truncate">{user?.role ?? ""}</div>
+          <div className="flex items-center justify-between">
+            <div className="text-white font-bold text-base tracking-wide truncate">
+              {user?.name || "Admin"}
             </div>
-            <button onClick={handleLogout} className="text-blue-300 hover:text-white transition" title="Logout">
+            <button onClick={handleLogout} className="text-blue-300 hover:text-white transition p-1" title="Logout">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             </button>
           </div>
