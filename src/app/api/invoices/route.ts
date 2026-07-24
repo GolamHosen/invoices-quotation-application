@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
-import { Invoice, Client, Project, Company } from "@/db/schema";
+import { Invoice, Client, Project, Company, Quotation } from "@/db/schema";
 import { generateId, generateInvoiceNumber } from "@/lib/utils";
 import { buildCompanyFilter } from "@/lib/companies";
 
@@ -26,23 +26,28 @@ export async function GET(req: NextRequest) {
     if (clientId) (filter as any).clientId = clientId;
     if (quotationId) (filter as any).quotationId = quotationId;
 
+    // Run main query + count in parallel
     const [invoices, total] = await Promise.all([
       Invoice.find(filter).select("-sections").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Invoice.countDocuments(filter),
     ]);
 
-    // Attach client and project names
+    // Collect unique IDs for batch lookup
     const clientIds = [...new Set(invoices.map(inv => inv.clientId))];
     const projectIds = [...new Set(invoices.map(inv => inv.projectId))];
-
-    // Attach quotation numbers
     const invoiceQuotationIds = [...new Set(invoices.map(inv => inv.quotationId).filter(Boolean))] as string[];
 
+    // Run ALL related lookups in parallel (not sequential)
     const [clients, projects, quotationDocs] = await Promise.all([
-      Client.find({ _id: { $in: clientIds } }).select("_id name email").lean(),
-      Project.find({ _id: { $in: projectIds } }).select("_id name").lean(),
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require("@/db/schema").Quotation.find({ _id: { $in: invoiceQuotationIds } }).select("_id quotationNumber").lean(),
+      clientIds.length > 0
+        ? Client.find({ _id: { $in: clientIds } }).select("_id name email").lean()
+        : Promise.resolve([]),
+      projectIds.length > 0
+        ? Project.find({ _id: { $in: projectIds } }).select("_id name").lean()
+        : Promise.resolve([]),
+      invoiceQuotationIds.length > 0
+        ? Quotation.find({ _id: { $in: invoiceQuotationIds } }).select("_id quotationNumber").lean()
+        : Promise.resolve([]),
     ]);
 
     const clientMap = new Map(clients.map((c: any) => [c._id, c.name]));

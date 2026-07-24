@@ -27,8 +27,12 @@ export async function GET(req: NextRequest) {
     const clientIds = [...new Set(quotations.map(q => q.clientId))];
     const projectIds = [...new Set(quotations.map(q => q.projectId))];
     const [clients, projects] = await Promise.all([
-      Client.find({ _id: { $in: clientIds } }).select("_id name email").lean(),
-      Project.find({ _id: { $in: projectIds } }).select("_id name").lean(),
+      clientIds.length > 0
+        ? Client.find({ _id: { $in: clientIds } }).select("_id name email").lean()
+        : Promise.resolve([]),
+      projectIds.length > 0
+        ? Project.find({ _id: { $in: projectIds } }).select("_id name").lean()
+        : Promise.resolve([]),
     ]);
     const clientMap = new Map(clients.map(c => [c._id, c.name]));
     const clientEmailMap = new Map(clients.map(c => [c._id, (c as any).email || null]));

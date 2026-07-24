@@ -29,8 +29,6 @@ export function CompanyProvider({
   const setActiveCompanyId = (id: string) => {
     setActiveCompanyIdState(id);
     document.cookie = `${COMPANY_COOKIE}=${id}; path=/; max-age=31536000`;
-    // Reload the page to ensure all components refetch with the new companyId
-    window.location.reload();
   };
 
   return (

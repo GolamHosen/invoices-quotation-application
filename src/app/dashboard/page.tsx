@@ -1,11 +1,20 @@
+"use client";
+
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
-import { cookies } from "next/headers";
-import { COMPANY_COOKIE, ALL_COMPANIES, buildCompanyFilter } from "@/lib/companies";
-import { connectDb } from "@/db";
-import { Quotation, Invoice, Client, Company } from "@/db/schema";
+import { useCompany } from "@/lib/company-context";
+import { useDashboardData } from "@/lib/api-hooks";
 
-type Stats = { totalQuotations: number; totalInvoices: number; pendingQuotations: number; approvedQuotations: number; paidInvoices: number; unpaidInvoices: number; totalRevenue: string; outstandingAmount: string; };
+type Stats = {
+  totalQuotations: number;
+  totalInvoices: number;
+  pendingQuotations: number;
+  approvedQuotations: number;
+  paidInvoices: number;
+  unpaidInvoices: number;
+  totalRevenue: string;
+  outstandingAmount: string;
+};
 
 const statCards = [
   { key: "totalQuotations" as const, label: "Total Quotations", icon: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z", color: "bg-blue-500", bg: "bg-blue-50", href: "/dashboard/quotations" },
@@ -16,116 +25,26 @@ const statCards = [
   { key: "unpaidInvoices" as const, label: "Unpaid Invoices", icon: "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-red-500", bg: "bg-red-50", href: "/dashboard/invoices?status=unpaid" },
 ];
 
-async function getDashboardData(companyId: string | null) {
-  await connectDb();
-  const filter = buildCompanyFilter(companyId);
+export default function DashboardPage() {
+  const { activeCompanyId } = useCompany();
+  const { data, isLoading, isError } = useDashboardData(activeCompanyId);
 
-  const [
-    totalQuotations,
-    totalInvoices,
-    pendingQuotations,
-    approvedQuotations,
-    paidInvoices,
-    unpaidInvoices,
-    revenueResult,
-    outstandingResult,
-    recentClients,
-    recentQuotations,
-    recentInvoices,
-  ] = await Promise.all([
-    Quotation.countDocuments(filter),
-    Invoice.countDocuments(filter),
-    Quotation.countDocuments({ ...filter, status: "draft" }),
-    Quotation.countDocuments({ ...filter, status: "approved" }),
-    Invoice.countDocuments({ ...filter, status: "paid" }),
-    Invoice.countDocuments({ ...filter, status: { $ne: "paid" } }),
-    Invoice.aggregate([
-      { $match: { ...filter, status: "paid" } },
-      { $group: { _id: null, total: { $sum: { $toDouble: "$totalAmount" } } } },
-    ]),
-    Invoice.aggregate([
-      { $match: { ...filter, status: { $ne: "paid" } } },
-      { $group: { _id: null, total: { $sum: { $toDouble: { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] } } } } },
-    ]),
-    Client.find(filter).sort({ createdAt: -1 }).limit(5).lean(),
-    Quotation.aggregate([
-      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
-      { $sort: { createdAt: -1 } },
-      { $limit: 5 },
-      { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
-      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-      { $project: { _id: 1, companyId: 1, quotationNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
-    ]),
-    Invoice.aggregate([
-      ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
-      { $sort: { createdAt: -1 } },
-      { $limit: 5 },
-      { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
-      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-      { $project: { _id: 1, companyId: 1, invoiceNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
-    ]),
-  ]);
-
-  const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total.toString() : "0";
-  const outstandingAmount = outstandingResult.length > 0 ? outstandingResult[0].total.toString() : "0";
-  
-  let byCompany: any[] = [];
-  if (!companyId || companyId === ALL_COMPANIES) {
-    const [companies, quotationCounts, invoiceStats] = await Promise.all([
-      Company.find().lean(),
-      Quotation.aggregate([{ $group: { _id: "$companyId", total: { $sum: 1 } } }]),
-      Invoice.aggregate([
-        {
-          $group: {
-            _id: "$companyId",
-            totalInvoices: { $sum: 1 },
-            revenue: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, { $toDouble: "$totalAmount" }, 0] } },
-            outstanding: { $sum: { $cond: [{ $ne: ["$status", "paid"] }, { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] }, 0] } },
-          },
-        },
-      ]),
-    ]);
-
-    const qMap = new Map(quotationCounts.map(q => [q._id, q.total]));
-    const iMap = new Map(invoiceStats.map(i => [i._id, i]));
-
-    byCompany = companies.map(c => {
-      const cId = c._id.toString();
-      const iStat = iMap.get(cId) || { totalInvoices: 0, revenue: 0, outstanding: 0 };
-      return {
-        companyId: cId,
-        shortName: c.shortName,
-        totalQuotations: qMap.get(cId) || 0,
-        totalInvoices: iStat.totalInvoices,
-        revenue: iStat.revenue.toString(),
-        outstanding: iStat.outstanding.toString(),
-      };
-    });
+  if (isLoading && !data) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div>
+      </div>
+    );
   }
 
-  return {
-    stats: {
-      totalQuotations,
-      totalInvoices,
-      pendingQuotations,
-      approvedQuotations,
-      paidInvoices,
-      unpaidInvoices,
-      totalRevenue,
-      outstandingAmount,
-    },
-    recentClients: recentClients.map(c => ({...c, _id: c._id.toString()})),
-    recentQuotations: recentQuotations.map(q => ({...q, _id: q._id.toString()})),
-    recentInvoices: recentInvoices.map(i => ({...i, _id: i._id.toString()})),
-    byCompany,
-  };
-}
+  if (isError || !data) {
+    return (
+      <div className="p-8 text-center text-red-500">
+        Failed to load dashboard data. Please refresh.
+      </div>
+    );
+  }
 
-export default async function DashboardPage() {
-  const cookieStore = await cookies();
-  const activeCompanyId = cookieStore.get(COMPANY_COOKIE)?.value || ALL_COMPANIES;
-  
-  const data = await getDashboardData(activeCompanyId);
   const stats = data.stats as Stats;
 
   return (
@@ -145,11 +64,11 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gradient-to-r from-[#1e3a5f] to-[#2563eb] rounded-xl p-6 text-white">
           <div className="text-sm text-blue-100 mb-1">Total Revenue (Paid)</div>
-          <div className="text-3xl font-bold">{formatCurrency(stats.totalRevenue || "0")}</div>
+          <div className="text-3xl font-bold">{formatCurrency(stats?.totalRevenue || "0")}</div>
         </div>
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-6 text-white">
           <div className="text-sm text-amber-100 mb-1">Outstanding Amount</div>
-          <div className="text-3xl font-bold">{formatCurrency(stats.outstandingAmount || "0")}</div>
+          <div className="text-3xl font-bold">{formatCurrency(stats?.outstandingAmount || "0")}</div>
         </div>
       </div>
       
@@ -189,7 +108,7 @@ export default async function DashboardPage() {
             <div className={`${card.color} w-10 h-10 rounded-lg flex items-center justify-center mb-3`}>
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={card.icon} /></svg>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{stats[card.key] || 0}</div>
+            <div className="text-2xl font-bold text-gray-900">{stats ? (stats[card.key] || 0) : 0}</div>
             <div className="text-xs text-gray-500 mt-1">{card.label}</div>
           </Link>
         ))}

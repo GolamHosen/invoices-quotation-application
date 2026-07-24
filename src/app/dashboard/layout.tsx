@@ -8,6 +8,10 @@ import { ClientDashboardLayout } from "./client-layout";
 import { cookies } from "next/headers";
 import { COMPANY_COOKIE, ALL_COMPANIES } from "@/lib/companies";
 
+const globalForCompanies = globalThis as typeof globalThis & {
+  __companiesChecked?: boolean;
+};
+
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   // 1. Fetch Session
   const session = await getSession();
@@ -18,11 +22,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   // 2. Fetch Companies
   await connectDb();
   
-  const existingCount = await Company.countDocuments({});
-  if (existingCount === 0) {
-    await ensureCompanies();
-  } else if (existingCount === 1) {
-    await migrateToMultiCompany();
+  if (!globalForCompanies.__companiesChecked) {
+    const existingCount = await Company.countDocuments({});
+    if (existingCount === 0) {
+      await ensureCompanies();
+    } else if (existingCount === 1) {
+      await migrateToMultiCompany();
+    }
+    globalForCompanies.__companiesChecked = true;
   }
   
   const companiesDocs = await Company.find().sort({ slug: 1 }).lean();

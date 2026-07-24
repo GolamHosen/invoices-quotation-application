@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { formatCurrency } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
+import { useClients, useClientMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
 
 const PAGE_SIZE = 10;
@@ -9,40 +9,28 @@ const PAGE_SIZE = 10;
 export default function ClientsPage() {
   const { activeCompanyId } = useCompany();
 
-  const [clients, setClients] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editClient, setEditClient] = useState<any>(null);
   const [form, setForm] = useState({ name: "", companyName: "", phone: "", email: "", address: "", notes: "" });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async (pageNum: number = page, searchTerm: string = search) => {
-    setLoading(true);
-    try {
-      let url = `/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`;
-      if (searchTerm) {
-        url += `&search=${encodeURIComponent(searchTerm)}`;
-      }
-      const r = await fetch(url);
-      const res = await r.json();
-      setClients(res.data);
-      setTotalItems(res.total);
-      setTotalPages(res.totalPages);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: res, isLoading: loading } = useClients({
+    page,
+    limit: PAGE_SIZE,
+    search: search || undefined,
+    companyId: activeCompanyId,
+  });
+
+  const { createClient, updateClient, deleteClient } = useClientMutations();
+
+  const clients = res?.data || [];
+  const totalItems = res?.total || 0;
+  const totalPages = res?.totalPages || 0;
 
   useEffect(() => {
     setPage(1);
   }, [activeCompanyId]);
-
-  useEffect(() => {
-    load(page, search);
-  }, [activeCompanyId, page]);
 
   const openCreate = () => { setEditClient(null); setForm({ name: "", companyName: "", phone: "", email: "", address: "", notes: "" }); setShowModal(true); };
   const openEdit = (c: any) => { setEditClient(c); setForm({ name: c.name, companyName: c.companyName || "", phone: c.phone || "", email: c.email || "", address: c.address || "", notes: c.notes || "" }); setShowModal(true); };
@@ -50,31 +38,20 @@ export default function ClientsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editClient) {
-      await fetch(`/api/clients/${editClient.id}?companyId=${encodeURIComponent(activeCompanyId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, companyId: activeCompanyId }),
-      });
+      await updateClient.mutateAsync({ id: editClient.id, companyId: activeCompanyId, ...form });
     } else {
-      await fetch("/api/clients?companyId=" + encodeURIComponent(activeCompanyId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, companyId: activeCompanyId }),
-      });
+      await createClient.mutateAsync({ ...form, companyId: activeCompanyId });
     }
     setShowModal(false);
-    load(page);
   };
 
   const handleDelete = async (id: string) => {
     const message =
       "Are you sure you want to delete this client? This action will permanently remove the client and all associated quotations, invoices, projects, documents, and records. This action cannot be undone.";
     if (confirm(message)) {
-      await fetch(`/api/clients/${id}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
+      await deleteClient.mutateAsync({ id, companyId: activeCompanyId });
       if (clients.length === 1 && page > 1) {
         setPage(page - 1);
-      } else {
-        load(page);
       }
     }
   };
@@ -82,7 +59,6 @@ export default function ClientsPage() {
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setPage(1);
-    load(1, value);
   };
 
   return (
@@ -104,7 +80,7 @@ export default function ClientsPage() {
             className="w-full max-w-sm px-4 py-2 bg-gray-100 rounded-lg text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:bg-white"
           />
         </div>
-        {loading ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
+        {loading && !clients.length ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-gray-50"><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Name</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Company</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phone</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Email</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Address</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th></tr></thead>

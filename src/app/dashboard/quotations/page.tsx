@@ -2,6 +2,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatCurrency, formatDate, QUOTATION_STATUSES } from "@/lib/utils";
+import { useCompany } from "@/lib/company-context";
+import { useQuotations, useQuotationMutations } from "@/lib/api-hooks";
+import Pagination from "@/components/Pagination";
 
 function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -111,52 +114,39 @@ function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, on
   );
 }
 
-import Pagination from "@/components/Pagination";
-
 const PAGE_SIZE = 10;
 
 function QuotationsContent() {
+  const { activeCompanyId } = useCompany();
   const searchParams = useSearchParams();
-  const [quotations, setQuotations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const quotationIdParam = searchParams.get("quotationId");
   const [viewQuotation, setViewQuotation] = useState<any>(null);
   const [relatedInvoices, setRelatedInvoices] = useState<any[]>([]);
   const [emailModal, setEmailModal] = useState<any>(null);
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async (pageNum: number = page, status?: string) => {
-    setLoading(true);
-    const filterStatus = status !== undefined ? status : statusFilter;
-    let url = `/api/quotations?page=${pageNum}&limit=${PAGE_SIZE}`;
-    if (filterStatus) url += `&status=${filterStatus}`;
-    const r = await fetch(url);
-    const res = await r.json();
-    setQuotations(res.data || []);
-    setTotalItems(res.total || 0);
-    setTotalPages(res.totalPages || 0);
-    setLoading(false);
-  };
+  const { data: res, isLoading: loading, refetch } = useQuotations({
+    page,
+    limit: PAGE_SIZE,
+    status: statusFilter || undefined,
+    companyId: activeCompanyId,
+  });
+
+  const { updateStatus, deleteQuotation, duplicateQuotation, convertToInvoice } = useQuotationMutations();
+
+  const quotations = res?.data || [];
+  const totalItems = res?.total || 0;
+  const totalPages = res?.totalPages || 0;
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, activeCompanyId]);
 
   useEffect(() => {
-    void (async () => {
-      await load(page);
-    })();
-  }, [statusFilter, page]);
-
-  useEffect(() => {
-    void (async () => {
-      if (!quotationIdParam) return;
-      const found = quotations.find((q: any) => q.id === quotationIdParam);
-      if (found) setViewQuotation(found);
-    })();
+    if (!quotationIdParam || !quotations.length) return;
+    const found = quotations.find((q: any) => q.id === quotationIdParam);
+    if (found) setViewQuotation(found);
   }, [quotationIdParam, quotations]);
 
   useEffect(() => {
@@ -167,20 +157,30 @@ function QuotationsContent() {
         return;
       }
       const r = await fetch(`/api/invoices?quotationId=${encodeURIComponent(qId)}`);
-      setRelatedInvoices(await r.json());
+      const invData = await r.json();
+      setRelatedInvoices(invData.data || invData || []);
     })();
   }, [viewQuotation?.id]);
 
-  const handleStatusChange = async (id: string, status: string) => { await fetch(`/api/quotations/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); load(); };
-  const handleDelete = async (id: string) => { if (confirm("Delete this quotation?")) { await fetch(`/api/quotations/${id}`, { method: "DELETE" }); load(); } };
+  const handleStatusChange = async (id: string, status: string) => {
+    await updateStatus.mutateAsync({ id, status });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Delete this quotation?")) {
+      await deleteQuotation.mutateAsync(id);
+    }
+  };
+
   const handleDuplicate = async (q: any) => {
     const { generateQuotationNumber } = await import("@/lib/utils");
     const newQ = { ...q, quotationNumber: generateQuotationNumber(), status: "draft", id: undefined, createdAt: undefined, updatedAt: undefined };
-    await fetch("/api/quotations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newQ) }); load();
+    await duplicateQuotation.mutateAsync(newQ);
   };
+
   const handleConvertToInvoice = async (id: string) => {
     if (!confirm("Convert this quotation to an invoice?")) return;
-    await fetch(`/api/quotations/${id}/convert`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+    await convertToInvoice.mutateAsync(id);
     window.location.href = "/dashboard/invoices";
   };
 
@@ -200,7 +200,7 @@ function QuotationsContent() {
         {QUOTATION_STATUSES.map(s => <button key={s.value} onClick={() => setStatusFilter(s.value)} className={`px-3 py-1.5 rounded-lg text-sm ${statusFilter === s.value ? "bg-[#1e3a5f] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{s.label}</button>)}
       </div>
       <div className="bg-white rounded-xl border border-gray-200">
-        {loading ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
+        {loading && !quotations.length ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-gray-50"><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Quotation #</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Client</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Project</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Amount</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th></tr></thead>
@@ -333,7 +333,7 @@ function QuotationsContent() {
           clientEmail={emailModal.clientEmail}
           clientName={emailModal.clientName}
           onClose={() => setEmailModal(null)}
-          onSent={load}
+          onSent={() => refetch()}
         />
       )}
     </div>

@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
 import { Quotation, Invoice, Client, Company } from "@/db/schema";
-import { buildCompanyFilter, ALL_COMPANIES } from "@/lib/companies";
+import { ALL_COMPANIES, buildCompanyFilter } from "@/lib/companies";
 
 export async function GET(req: NextRequest) {
-  const startedAt = Date.now();
-
   try {
-    console.log("[api/dashboard] GET start");
     await connectDb();
     const companyId = req.nextUrl.searchParams.get("companyId");
     const filter = buildCompanyFilter(companyId);
@@ -95,8 +92,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(`[api/dashboard] GET done in ${Date.now() - startedAt}ms`);
-    return NextResponse.json({
+    const payload = {
       stats: {
         totalQuotations,
         totalInvoices,
@@ -107,14 +103,19 @@ export async function GET(req: NextRequest) {
         totalRevenue,
         outstandingAmount,
       },
-      recentClients,
-      recentQuotations,
-      recentInvoices,
+      recentClients: recentClients.map(c => ({...c, _id: c._id.toString()})),
+      recentQuotations: recentQuotations.map(q => ({...q, _id: q._id.toString()})),
+      recentInvoices: recentInvoices.map(i => ({...i, _id: i._id.toString()})),
       byCompany,
+    };
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+      },
     });
   } catch (error) {
-    console.error("Dashboard stats error:", error);
-    console.error(`[api/dashboard] GET failed after ${Date.now() - startedAt}ms`);
+    console.error("Dashboard data API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -30,7 +30,9 @@ export async function GET(req: NextRequest) {
     
     // Attach client names
     const clientIds = [...new Set(projects.map(p => p.clientId))];
-    const clients = await Client.find({ _id: { $in: clientIds } }).select("_id name").lean();
+    const clients = clientIds.length > 0
+      ? await Client.find({ _id: { $in: clientIds } }).select("_id name").lean()
+      : [];
     const clientMap = new Map(clients.map(c => [c._id, c.name]));
     
     const result = projects.map(p => ({

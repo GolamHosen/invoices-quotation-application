@@ -2,9 +2,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatCurrency, formatDate, INVOICE_STATUSES } from "@/lib/utils";
+import { useCompany } from "@/lib/company-context";
+import { useInvoices, useInvoiceMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
-
-const PAGE_SIZE = 10;
 
 function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -114,51 +114,55 @@ function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, on
   );
 }
 
+const PAGE_SIZE = 10;
+
 function InvoicesContent() {
+  const { activeCompanyId } = useCompany();
   const searchParams = useSearchParams();
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [emailModal, setEmailModal] = useState<any>(null);
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
-  const load = async (pageNum: number = page) => {
-    setLoading(true);
-    let url = `/api/invoices?page=${pageNum}&limit=${PAGE_SIZE}`;
-    if (statusFilter) url += `&status=${statusFilter}`;
-    const r = await fetch(url);
-    const res = await r.json();
-    setInvoices(res.data || []);
-    setTotalItems(res.total || 0);
-    setTotalPages(res.totalPages || 0);
-    setLoading(false);
-  };
+  const { data: res, isLoading: loading, refetch } = useInvoices({
+    page,
+    limit: PAGE_SIZE,
+    status: statusFilter || undefined,
+    companyId: activeCompanyId,
+  });
+
+  const { updateStatus, deleteInvoice, duplicateInvoice } = useInvoiceMutations();
+
+  const invoices = res?.data || [];
+  const totalItems = res?.total || 0;
+  const totalPages = res?.totalPages || 0;
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, activeCompanyId]);
 
-  useEffect(() => {
-    load(page);
-  }, [statusFilter, page]);
+  const handleStatusChange = async (id: string, status: string) => {
+    await updateStatus.mutateAsync({ id, status });
+  };
 
-  const handleStatusChange = async (id: string, status: string) => { await fetch(`/api/invoices/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); load(); };
-  const handleDelete = async (id: string) => { if (confirm("Delete this invoice?")) { await fetch(`/api/invoices/${id}`, { method: "DELETE" }); load(); } };
+  const handleDelete = async (id: string) => {
+    if (confirm("Delete this invoice?")) {
+      await deleteInvoice.mutateAsync(id);
+    }
+  };
+
   const handleRecordPayment = async (id: string, currentPaid: number, total: number) => {
     const amount = prompt(`Enter payment amount (Balance: ${formatCurrency(total - currentPaid)}):`);
     if (!amount) return;
     const newPaid = currentPaid + parseFloat(amount);
     const newStatus = newPaid >= total ? "paid" : "partially_paid";
-    await fetch(`/api/invoices/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paidAmount: newPaid, status: newStatus }) });
-    load();
+    await updateStatus.mutateAsync({ id, paidAmount: newPaid, status: newStatus });
   };
+
   const handleDuplicate = async (inv: any) => {
     const { generateInvoiceNumber } = await import("@/lib/utils");
     const newInv = { clientId: inv.clientId, projectId: inv.projectId, quotationId: inv.quotationId, invoiceNumber: generateInvoiceNumber(), status: "draft", sections: inv.sections, subtotal: inv.subtotal, gstAmount: inv.gstAmount, totalAmount: inv.totalAmount, paymentTerms: inv.paymentTerms, notes: inv.notes };
-    await fetch("/api/invoices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newInv) }); load();
+    await duplicateInvoice.mutateAsync(newInv);
   };
 
   const statusColors: Record<string, string> = { draft: "bg-gray-100 text-gray-700", sent: "bg-blue-100 text-blue-700", partially_paid: "bg-amber-100 text-amber-700", paid: "bg-green-100 text-green-700", overdue: "bg-red-100 text-red-700" };
@@ -178,7 +182,7 @@ function InvoicesContent() {
         {INVOICE_STATUSES.map(s => <button key={s.value} onClick={() => setStatusFilter(s.value)} className={`px-3 py-1.5 rounded-lg text-sm ${statusFilter === s.value ? "bg-[#1e3a5f] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{s.label}</button>)}
       </div>
       <div className="bg-white rounded-xl border border-gray-200">
-        {loading ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
+        {loading && !invoices.length ? <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-[#1e3a5f] border-t-transparent mx-auto"></div></div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="bg-gray-50"><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Invoice #</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Client</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Project</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Total</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Paid</th><th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Due Date</th><th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th></tr></thead>
@@ -283,7 +287,7 @@ function InvoicesContent() {
           clientEmail={emailModal.clientEmail}
           clientName={emailModal.clientName}
           onClose={() => setEmailModal(null)}
-          onSent={load}
+          onSent={() => refetch()}
         />
       )}
     </div>
