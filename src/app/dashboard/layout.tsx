@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { connectDb } from "@/db";
 import { Company } from "@/db/schema";
 import { ensureCompanies, migrateToMultiCompany } from "@/lib/seed-companies";
+import { ensureHujuratLogo } from "@/lib/ensure-logo";
 import { ClientDashboardLayout } from "./client-layout";
 import { cookies } from "next/headers";
 import { COMPANY_COOKIE, ALL_COMPANIES } from "@/lib/companies";
@@ -28,6 +29,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       await ensureCompanies();
     } else if (existingCount === 1) {
       await migrateToMultiCompany();
+    } else {
+      await ensureHujuratLogo();
     }
     globalForCompanies.__companiesChecked = true;
   }

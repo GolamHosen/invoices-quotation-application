@@ -3,6 +3,7 @@ import { connectDb } from "@/db";
 import { Invoice, Client, Project, Company } from "@/db/schema";
 import { generateInvoicePdf } from "@/lib/pdf";
 import { formatDate, PROJECT_TYPES } from "@/lib/utils";
+import { getLogoDataUrl } from "@/lib/ensure-logo";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,8 +19,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       Company.findOne({ _id: inv.companyId }).lean(),
     ]);
 
-    const company =
-      settings || {
+    const logoDataUrl = getLogoDataUrl(settings?.logoUrl);
+    const company = {
+      ...(settings || {
         companyName: "Hujurat Construction Pty Ltd",
         abn: null,
         acn: null,
@@ -33,9 +35,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         bankAccountName: null,
         gstEnabled: true,
         gstRate: "10",
-        logoUrl: null,
         defaultTerms: null,
-      };
+      }),
+      logoUrl: logoDataUrl || settings?.logoUrl || "/hujurat-logo.png",
+    };
 
     const docDefinition = generateInvoicePdf({
       company: company as any,

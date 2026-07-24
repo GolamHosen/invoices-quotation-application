@@ -14,6 +14,41 @@ export default function SettingsPage() {
   const [sectionOptions, setSectionOptions] = useState<any[]>([]);
   const [newSectionName, setNewSectionName] = useState("");
   const [addingSection, setAddingSection] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("companyId", activeCompanyId);
+
+      const res = await fetch("/api/settings/upload-logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSettings((prev: any) => ({ ...prev, logoUrl: data.logoUrl }));
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to upload logo image");
+      }
+    } catch (err) {
+      console.error("Upload logo error:", err);
+      alert("Error uploading logo image");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setSettings((prev: any) => ({ ...prev, logoUrl: null }));
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -114,6 +149,47 @@ export default function SettingsPage() {
             <svg className="w-5 h-5 text-[#1e3a5f]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
             Company Information
           </h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
+            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border border-gray-200 rounded-xl bg-gray-50/50">
+              <div className="w-32 h-20 bg-white rounded-lg border border-gray-200 flex items-center justify-center p-2 shadow-sm flex-shrink-0">
+                {settings.logoUrl ? (
+                  <img src={settings.logoUrl} alt="Company Logo" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <div className="text-center text-xs text-gray-400">No Logo</div>
+                )}
+              </div>
+              
+              <div className="flex-1 space-y-2 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start gap-3">
+                  <label className={`px-4 py-2 bg-[#1e3a5f] text-white text-xs font-semibold rounded-lg hover:bg-[#152b48] cursor-pointer transition flex items-center gap-2 ${uploadingLogo ? "opacity-50 pointer-events-none" : ""}`}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    {uploadingLogo ? "Uploading..." : "Upload Logo File"}
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                      onChange={handleLogoChange}
+                      className="hidden"
+                      disabled={uploadingLogo}
+                    />
+                  </label>
+
+                  {settings.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="px-3 py-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                    >
+                      Remove Logo
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">Upload your logo image (PNG, JPG, WEBP, or SVG)</p>
+              </div>
+            </div>
+          </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label><input value={settings.companyName || ""} onChange={e => setSettings({...settings, companyName: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm" /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">ABN</label><input value={settings.abn || ""} onChange={e => setSettings({...settings, abn: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 12 345 678 901" /></div>

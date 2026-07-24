@@ -1,8 +1,10 @@
 import { Company, Client, Project, Template, Quotation, Invoice } from "@/db/schema";
 import { DEFAULT_COMPANIES } from "@/lib/companies";
 import { generateId } from "@/lib/utils";
+import { ensureHujuratLogo } from "@/lib/ensure-logo";
 
 export async function ensureCompanies(): Promise<{ constructionId: string; engineeringId: string }> {
+  await ensureHujuratLogo();
   const ids: Record<string, string> = {};
 
   for (const def of DEFAULT_COMPANIES) {

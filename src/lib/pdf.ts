@@ -78,12 +78,17 @@ export function generateQuotationPdf(data: {
     );
   }
 
+  const logoItem = company.logoUrl && company.logoUrl.startsWith("data:image/")
+    ? { image: company.logoUrl, fit: [160, 50] as [number, number], margin: [0, 0, 0, 8] as [number, number, number, number] }
+    : null;
+
   const content: AnyContent[] = [
     {
       columns: [
         {
           width: "*",
           stack: [
+            ...(logoItem ? [logoItem] : []),
             { text: "QUOTATION", style: "documentTitle" },
             { text: quotationNumber, style: "documentNumber" },
           ],
@@ -338,12 +343,17 @@ export function generateInvoicePdf(data: {
     );
   }
 
+  const logoItem = company.logoUrl && company.logoUrl.startsWith("data:image/")
+    ? { image: company.logoUrl, fit: [160, 50] as [number, number], margin: [0, 0, 0, 8] as [number, number, number, number] }
+    : null;
+
   const content: AnyContent[] = [
     {
       columns: [
         {
           width: "*",
           stack: [
+            ...(logoItem ? [logoItem] : []),
             { text: "INVOICE", style: "documentTitle" },
             { text: invoiceNumber, style: "documentNumber" },
           ],

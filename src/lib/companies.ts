@@ -6,6 +6,7 @@ export const DEFAULT_COMPANIES = [
     slug: "construction",
     shortName: "Construction",
     companyName: "Hujurat Construction PTY Ltd",
+    logoUrl: "/hujurat-logo.png",
     quotationPrefix: "HC-QUO",
     invoicePrefix: "HC-INV",
     abn: "12 345 678 901",
