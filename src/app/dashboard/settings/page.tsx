@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useCompany } from "@/lib/company-context";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function SettingsPage() {
   const { activeCompanyId } = useCompany();
@@ -18,6 +19,7 @@ export default function SettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -117,11 +119,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteSection = async (id: string) => {
-    if (!confirm("Delete this section option? It will be removed from the dropdown in templates.")) return;
+  const handleDeleteSection = async () => {
+    if (!deleteConfirmId) return;
 
     try {
-      const r = await fetch(`/api/template-sections/${id}`, { method: "DELETE" });
+      const r = await fetch(`/api/template-sections/${deleteConfirmId}`, { method: "DELETE" });
       if (r.ok) {
         await refreshSections();
       } else {
@@ -129,6 +131,8 @@ export default function SettingsPage() {
       }
     } catch {
       alert("Failed to delete section option");
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
@@ -365,7 +369,7 @@ export default function SettingsPage() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleDeleteSection(optId)}
+                            onClick={() => setDeleteConfirmId(optId)}
                             className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition text-sm"
                             title="Delete section option"
                           >
@@ -383,6 +387,17 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Section Option"
+        message="Are you sure you want to delete this section option? It will be removed from the dropdown in templates."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteSection}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }
