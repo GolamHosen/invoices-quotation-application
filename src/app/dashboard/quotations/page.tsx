@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, QUOTATION_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import { useQuotations, useQuotationMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -166,10 +167,13 @@ function QuotationsContent() {
     await updateStatus.mutateAsync({ id, status });
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this quotation?")) {
-      await deleteQuotation.mutateAsync(id);
-    }
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [convertConfirmId, setConvertConfirmId] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    await deleteQuotation.mutateAsync(deleteConfirmId);
+    setDeleteConfirmId(null);
   };
 
   const handleDuplicate = async (q: any) => {
@@ -178,9 +182,10 @@ function QuotationsContent() {
     await duplicateQuotation.mutateAsync(newQ);
   };
 
-  const handleConvertToInvoice = async (id: string) => {
-    if (!confirm("Convert this quotation to an invoice?")) return;
-    await convertToInvoice.mutateAsync(id);
+  const handleConvertToInvoice = async () => {
+    if (!convertConfirmId) return;
+    await convertToInvoice.mutateAsync(convertConfirmId);
+    setConvertConfirmId(null);
     window.location.href = "/dashboard/invoices";
   };
 
@@ -221,8 +226,8 @@ function QuotationsContent() {
                       <a href={`/api/quotations/${q.id}/pdf`} target="_blank" className="text-blue-600 hover:text-blue-800 text-sm mr-2">PDF</a>
                       <button onClick={() => setEmailModal({ id: q.id, number: q.quotationNumber, clientEmail: q.clientEmail, clientName: q.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(q)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
-                      {q.status === "approved" && <button onClick={() => handleConvertToInvoice(q.id)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">→ Invoice</button>}
-                      <button onClick={() => handleDelete(q.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                      {q.status === "approved" && <button onClick={() => setConvertConfirmId(q.id)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">→ Invoice</button>}
+                      <button onClick={() => setDeleteConfirmId(q.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -336,6 +341,26 @@ function QuotationsContent() {
           onSent={() => refetch()}
         />
       )}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Quotation"
+        message="Are you sure you want to delete this quotation? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
+      <ConfirmDialog
+        open={!!convertConfirmId}
+        title="Convert to Invoice"
+        message="Are you sure you want to convert this quotation to an invoice?"
+        confirmLabel="Convert"
+        cancelLabel="Cancel"
+        variant="info"
+        onConfirm={handleConvertToInvoice}
+        onCancel={() => setConvertConfirmId(null)}
+      />
     </div>
   );
 }

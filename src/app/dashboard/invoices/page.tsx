@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, INVOICE_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import { useInvoices, useInvoiceMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -145,10 +146,12 @@ function InvoicesContent() {
     await updateStatus.mutateAsync({ id, status });
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this invoice?")) {
-      await deleteInvoice.mutateAsync(id);
-    }
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    await deleteInvoice.mutateAsync(deleteConfirmId);
+    setDeleteConfirmId(null);
   };
 
   const handleRecordPayment = async (id: string, currentPaid: number, total: number) => {
@@ -205,7 +208,7 @@ function InvoicesContent() {
                       <button onClick={() => setEmailModal({ id: inv.id, number: inv.invoiceNumber, clientEmail: inv.clientEmail, clientName: inv.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(inv)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
                       {inv.status !== "paid" && <button onClick={() => handleRecordPayment(inv.id, parseFloat(inv.paidAmount || "0"), parseFloat(inv.totalAmount || "0"))} className="text-green-600 hover:text-green-800 text-sm mr-2">Pay</button>}
-                      <button onClick={() => handleDelete(inv.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                      <button onClick={() => setDeleteConfirmId(inv.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -290,6 +293,16 @@ function InvoicesContent() {
           onSent={() => refetch()}
         />
       )}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Invoice"
+        message="Are you sure you want to delete this invoice? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

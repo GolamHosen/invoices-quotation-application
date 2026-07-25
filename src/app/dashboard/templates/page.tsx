@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { PROJECT_TYPES, generateId, UNITS } from "@/lib/utils";
 import { getDefaultTemplateSectionOptions } from "@/lib/template-section-options";
 import { useCompany } from "@/lib/company-context";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type Item = { id: string; description: string; quantity: number; unit: string; rate: number };
 type Section = { id: string; name: string; items: Item[] };
@@ -17,6 +18,7 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<any>(null);
   const [creating, setCreating] = useState(false);
   const { activeCompanyId } = useCompany();
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Dynamically fetched section options
   const [sectionOptions, setSectionOptions] = useState<string[]>(getDefaultTemplateSectionOptions());
@@ -252,11 +254,11 @@ export default function TemplatesPage() {
     load();
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this template?")) {
-      await fetch(`/api/templates/${id}`, { method: "DELETE" });
-      load();
-    }
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    await fetch(`/api/templates/${deleteConfirmId}`, { method: "DELETE" });
+    setDeleteConfirmId(null);
+    load();
   };
 
   const cancelEdit = () => {
@@ -528,7 +530,7 @@ export default function TemplatesPage() {
                   <button onClick={() => openEdit(t)} className="flex-1 text-center py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition">
                     Edit
                   </button>
-                  <button onClick={() => handleDelete(t.id)} className="flex-1 text-center py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition">
+                  <button onClick={() => setDeleteConfirmId(t.id)} className="flex-1 text-center py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition">
                     Delete
                   </button>
                 </div>
@@ -547,6 +549,16 @@ export default function TemplatesPage() {
         totalItems={totalItems}
         onPageChange={setPage}
         pageSize={PAGE_SIZE}
+      />
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Template"
+        message="Are you sure you want to delete this template? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmId(null)}
       />
     </div>
   );

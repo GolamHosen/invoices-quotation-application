@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { PROJECT_TYPES, PROJECT_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import Pagination from "@/components/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const PAGE_SIZE = 10;
 
@@ -18,6 +19,7 @@ export default function ProjectsPage() {
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const load = async (pageNum: number = page) => {
     setLoading(true);
@@ -74,14 +76,14 @@ export default function ProjectsPage() {
     load(page);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this project?")) {
-      await fetch(`/api/projects/${id}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
-      if (projects.length === 1 && page > 1) {
-        setPage(page - 1);
-      } else {
-        load(page);
-      }
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    await fetch(`/api/projects/${deleteConfirmId}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
+    setDeleteConfirmId(null);
+    if (projects.length === 1 && page > 1) {
+      setPage(page - 1);
+    } else {
+      load(page);
     }
   };
 
@@ -111,7 +113,7 @@ export default function ProjectsPage() {
                     <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px] truncate">{p.address || "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800 text-sm mr-3">Edit</button>
-                      <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                      <button onClick={() => setDeleteConfirmId(p.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -148,6 +150,16 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Project"
+        message="Are you sure you want to delete this project? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useCompany } from "@/lib/company-context";
 import { useClients, useClientMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const PAGE_SIZE = 10;
 
@@ -14,6 +15,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ name: "", companyName: "", phone: "", email: "", address: "", notes: "" });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const { data: res, isLoading: loading } = useClients({
     page,
@@ -45,14 +47,12 @@ export default function ClientsPage() {
     setShowModal(false);
   };
 
-  const handleDelete = async (id: string) => {
-    const message =
-      "Are you sure you want to delete this client? This action will permanently remove the client and all associated quotations, invoices, projects, documents, and records. This action cannot be undone.";
-    if (confirm(message)) {
-      await deleteClient.mutateAsync({ id, companyId: activeCompanyId });
-      if (clients.length === 1 && page > 1) {
-        setPage(page - 1);
-      }
+  const handleDelete = async () => {
+    if (!deleteConfirmId) return;
+    await deleteClient.mutateAsync({ id: deleteConfirmId, companyId: activeCompanyId });
+    setDeleteConfirmId(null);
+    if (clients.length === 1 && page > 1) {
+      setPage(page - 1);
     }
   };
 
@@ -94,7 +94,7 @@ export default function ClientsPage() {
                     <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px] truncate">{c.address || "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <button onClick={() => openEdit(c)} className="text-blue-600 hover:text-blue-800 text-sm mr-3">Edit</button>
-                      <button onClick={() => handleDelete(c.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                      <button onClick={() => setDeleteConfirmId(c.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -132,6 +132,16 @@ export default function ClientsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Client"
+        message="Are you sure you want to delete this client? This action will permanently remove the client and all associated quotations, invoices, projects, documents, and records. This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }
