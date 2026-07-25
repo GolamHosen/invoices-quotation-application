@@ -15,6 +15,9 @@ export default function SettingsPage() {
   const [newSectionName, setNewSectionName] = useState("");
   const [addingSection, setAddingSection] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,6 +86,12 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 3000);
   };
 
+  const refreshSections = async () => {
+    const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
+    const sectionsRes = await fetch(`/api/template-sections${param}`);
+    if (sectionsRes.ok) setSectionOptions(await sectionsRes.json());
+  };
+
   const handleAddSection = async () => {
     const name = newSectionName.trim();
     if (!name) return;
@@ -96,9 +105,7 @@ export default function SettingsPage() {
       });
       if (r.ok) {
         setNewSectionName("");
-        const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
-        const sectionsRes = await fetch(`/api/template-sections${param}`);
-        if (sectionsRes.ok) setSectionOptions(await sectionsRes.json());
+        await refreshSections();
       } else {
         const err = await r.json();
         alert(err.error || "Failed to add section option");
@@ -116,14 +123,49 @@ export default function SettingsPage() {
     try {
       const r = await fetch(`/api/template-sections/${id}`, { method: "DELETE" });
       if (r.ok) {
-        const param = `?companyId=${encodeURIComponent(activeCompanyId)}`;
-        const sectionsRes = await fetch(`/api/template-sections${param}`);
-        if (sectionsRes.ok) setSectionOptions(await sectionsRes.json());
+        await refreshSections();
       } else {
         alert("Failed to delete section option");
       }
     } catch {
       alert("Failed to delete section option");
+    }
+  };
+
+  const handleStartEdit = (opt: any) => {
+    setEditingId(opt.id || opt._id);
+    setEditingName(opt.name);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingName("");
+  };
+
+  const handleEditSection = async () => {
+    if (!editingId) return;
+    const name = editingName.trim();
+    if (!name) return;
+
+    setSavingEdit(true);
+    try {
+      const r = await fetch(`/api/template-sections/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (r.ok) {
+        setEditingId(null);
+        setEditingName("");
+        await refreshSections();
+      } else {
+        const err = await r.json();
+        alert(err.error || "Failed to update section option");
+      }
+    } catch {
+      alert("Failed to update section option");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -273,18 +315,70 @@ export default function SettingsPage() {
             {sectionOptions.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">No section options yet. Add one above.</p>
             ) : (
-              sectionOptions.map((opt: any) => (
-                <div key={opt.id || opt._id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg group">
-                  <span className="text-sm text-gray-700">{opt.name}</span>
-                  <button
-                    onClick={() => handleDeleteSection(opt.id || opt._id)}
-                    className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity text-sm p-1"
-                    title="Delete section option"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))
+              sectionOptions.map((opt: any) => {
+                const optId = opt.id || opt._id;
+                const isEditing = editingId === optId;
+
+                return (
+                  <div key={optId} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg group">
+                    {isEditing ? (
+                      /* Inline edit mode */
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleEditSection();
+                            if (e.key === "Escape") handleCancelEdit();
+                          }}
+                          className="flex-1 px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          autoFocus
+                          disabled={savingEdit}
+                        />
+                        <button
+                          onClick={handleEditSection}
+                          disabled={savingEdit || !editingName.trim()}
+                          className="px-2.5 py-1 bg-[#1e3a5f] text-white rounded text-xs font-medium hover:bg-[#152b48] disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {savingEdit ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          disabled={savingEdit}
+                          className="px-2.5 py-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded text-xs font-medium transition whitespace-nowrap"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      /* Display mode */
+                      <>
+                        <span className="text-sm text-gray-700">{opt.name}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleStartEdit(opt)}
+                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded p-1 transition text-sm"
+                            title="Edit section option"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSection(optId)}
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition text-sm"
+                            title="Delete section option"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
