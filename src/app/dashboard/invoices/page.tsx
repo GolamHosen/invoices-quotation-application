@@ -124,6 +124,16 @@ function InvoicesContent() {
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [emailModal, setEmailModal] = useState<any>(null);
   const [page, setPage] = useState(1);
+  const [companySettings, setCompanySettings] = useState<any>(null);
+
+  useEffect(() => {
+    if (activeCompanyId) {
+      fetch(`/api/settings?companyId=${encodeURIComponent(activeCompanyId)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => setCompanySettings(data))
+        .catch(() => setCompanySettings(null));
+    }
+  }, [activeCompanyId]);
 
   const { data: res, isLoading: loading, refetch } = useInvoices({
     page,
@@ -258,6 +268,16 @@ function InvoicesContent() {
               </div>
             </div>
             <div className="p-6 space-y-4">
+              {companySettings?.logoUrl && (
+                <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                  <img src={companySettings.logoUrl} alt={companySettings.companyName || "Company Logo"} className="h-12 max-w-[200px] object-contain" />
+                  <div className="text-right text-xs text-gray-500">
+                    <div className="font-semibold text-gray-700 text-sm">{companySettings.companyName}</div>
+                    {companySettings.abn && <div>ABN: {companySettings.abn}</div>}
+                    {companySettings.phone && <div>Phone: {companySettings.phone}</div>}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div><span className="text-gray-500">Status:</span> <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[viewInvoice.status]}`}>{viewInvoice.status?.replace("_", " ")}</span></div>
                 <div><span className="text-gray-500">Issue Date:</span> <span className="ml-1">{formatDate(viewInvoice.issueDate || viewInvoice.createdAt)}</span></div>

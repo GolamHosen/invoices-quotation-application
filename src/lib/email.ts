@@ -3,6 +3,7 @@ import { connectDb } from "@/db";
 import { Quotation, Invoice, Client, Project, Company } from "@/db/schema";
 import { generateQuotationPdf, generateInvoicePdf } from "@/lib/pdf";
 import { formatDate, PROJECT_TYPES } from "@/lib/utils";
+import { getLogoDataUrl } from "@/lib/ensure-logo";
 
 function createTransporter() {
   const host = process.env.SMTP_HOST;
@@ -78,7 +79,12 @@ export async function sendQuotationEmail(
     throw new Error("No email address found for this client. Please add a client email or specify a recipient.");
   }
 
-  const company = settings || getCompanyDefaults();
+  const companyDefaults = getCompanyDefaults();
+  const logoDataUrl = await getLogoDataUrl(settings?.logoUrl);
+  const company = {
+    ...(settings || companyDefaults),
+    logoUrl: logoDataUrl || settings?.logoUrl || null,
+  };
   const companyName = (company as any).companyName || "Hujurat Construction Pty Ltd";
 
   const docDefinition = generateQuotationPdf({
@@ -179,7 +185,12 @@ export async function sendInvoiceEmail(
     throw new Error("No email address found for this client. Please add a client email or specify a recipient.");
   }
 
-  const company = settings || getCompanyDefaults();
+  const companyDefaults = getCompanyDefaults();
+  const logoDataUrl = await getLogoDataUrl(settings?.logoUrl);
+  const company = {
+    ...(settings || companyDefaults),
+    logoUrl: logoDataUrl || settings?.logoUrl || null,
+  };
   const companyName = (company as any).companyName || "Hujurat Construction Pty Ltd";
 
   const docDefinition = generateInvoicePdf({

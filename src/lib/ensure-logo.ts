@@ -27,13 +27,34 @@ export async function ensureHujuratLogo() {
   }
 }
 
-export function getLogoDataUrl(customPath?: string | null): string | null {
+export async function getLogoDataUrl(customPath?: string | null): Promise<string | null> {
   try {
     const publicDir = path.join(process.cwd(), "public");
     let targetFile = path.join(publicDir, "hujurat-logo.png");
 
+    if (!customPath) {
+      const defaultCompany = await Company.findOne({ slug: "construction" }).lean();
+      if (defaultCompany?.logoUrl) {
+        customPath = defaultCompany.logoUrl;
+      }
+    }
+
     if (customPath && customPath.startsWith("data:image/")) {
       return customPath;
+    }
+
+    if (customPath && (customPath.startsWith("http://") || customPath.startsWith("https://"))) {
+      try {
+        const res = await fetch(customPath);
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const contentType = res.headers.get("content-type") || "image/png";
+          return `data:${contentType};base64,${buffer.toString("base64")}`;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch remote logo image:", customPath, err);
+      }
     }
 
     if (customPath && customPath.startsWith("/")) {
@@ -53,8 +74,8 @@ export function getLogoDataUrl(customPath?: string | null): string | null {
 
     if (fs.existsSync(targetFile)) {
       const buffer = fs.readFileSync(targetFile);
-      const ext = path.extname(targetFile).replace(".", "") || "png";
-      const mime = ext === "svg" ? "image/svg+xml" : `image/${ext}`;
+      const ext = path.extname(targetFile).replace(".", "").toLowerCase() || "png";
+      const mime = ext === "svg" ? "image/svg+xml" : `image/${ext === "jpg" ? "jpeg" : ext}`;
       return `data:${mime};base64,${buffer.toString("base64")}`;
     }
   } catch (error) {

@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       Company.findOne({ _id: q.companyId }).lean(),
     ]);
 
-    const logoDataUrl = getLogoDataUrl(settings?.logoUrl);
+    const logoDataUrl = await getLogoDataUrl(settings?.logoUrl);
     const company = {
       ...(settings || {
         companyName: "Hujurat Construction Pty Ltd",
