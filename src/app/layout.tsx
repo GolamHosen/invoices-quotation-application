@@ -4,7 +4,7 @@ import "./globals.css";
 import { QueryProvider } from "@/lib/query-provider";
 
 export const metadata: Metadata = {
-  title: "Hujurat Construction - Quotation & Invoice Management",
+  title: "Quotation & Invoice Management",
   description: "Professional Construction Quotation & Invoice Management System for Hujurat Construction Pty Ltd",
 };
 
