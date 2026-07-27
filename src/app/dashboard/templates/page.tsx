@@ -4,6 +4,8 @@ import { PROJECT_TYPES, generateId, UNITS } from "@/lib/utils";
 import { getDefaultTemplateSectionOptions } from "@/lib/template-section-options";
 import { useCompany } from "@/lib/company-context";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ToastContainer from "@/components/Toast";
+import { useToast } from "@/lib/use-toast";
 
 type Item = { id: string; description: string; quantity: number; unit: string; rate: number };
 type Section = { id: string; name: string; items: Item[] };
@@ -19,6 +21,7 @@ export default function TemplatesPage() {
   const [creating, setCreating] = useState(false);
   const { activeCompanyId } = useCompany();
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { toasts, dismiss, withToast } = useToast();
 
   // Dynamically fetched section options
   const [sectionOptions, setSectionOptions] = useState<string[]>(getDefaultTemplateSectionOptions());
@@ -228,37 +231,54 @@ export default function TemplatesPage() {
       sections: form.sections,
     };
 
-    try {
-      if (editing) {
-        const r = await fetch(`/api/templates/${editing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!r.ok) throw new Error(`PUT failed: ${r.status}`);
-      } else {
-        const r = await fetch("/api/templates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, isDefault: false }),
-        });
-        if (!r.ok) throw new Error(`POST failed: ${r.status}`);
-      }
-    } catch (e: any) {
-      alert(e?.message || "Failed to save template");
-      return;
-    }
+    const isEdit = !!editing;
+    const result = await withToast({
+      loadingMessage: isEdit ? "Updating template..." : "Adding template...",
+      successMessage: isEdit ? "Template updated successfully." : "Template added successfully.",
+      errorMessage: isEdit ? "Failed to update template." : "Failed to add template.",
+      operationKey: isEdit ? `update-template-${editing.id}` : "create-template",
+      fn: async () => {
+        if (isEdit) {
+          const r = await fetch(`/api/templates/${editing.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok) throw new Error(`PUT failed: ${r.status}`);
+        } else {
+          const r = await fetch("/api/templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...body, isDefault: false }),
+          });
+          if (!r.ok) throw new Error(`POST failed: ${r.status}`);
+        }
+        return true;
+      },
+    });
 
-    setEditing(null);
-    setCreating(false);
-    load();
+    if (result) {
+      setEditing(null);
+      setCreating(false);
+      load();
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await fetch(`/api/templates/${deleteConfirmId}`, { method: "DELETE" });
+    const idToDelete = deleteConfirmId;
     setDeleteConfirmId(null);
-    load();
+    await withToast({
+      loadingMessage: "Deleting template...",
+      successMessage: "Template deleted successfully.",
+      errorMessage: "Failed to delete template.",
+      operationKey: `delete-template-${idToDelete}`,
+      fn: async () => {
+        const r = await fetch(`/api/templates/${idToDelete}`, { method: "DELETE" });
+        if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        load();
+      },
+    });
   };
 
   const cancelEdit = () => {
@@ -465,6 +485,7 @@ export default function TemplatesPage() {
             </button>
           </div>
         </div>
+        <ToastContainer toasts={toasts} onDismiss={dismiss} />
       </div>
     );
 
@@ -560,6 +581,7 @@ export default function TemplatesPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

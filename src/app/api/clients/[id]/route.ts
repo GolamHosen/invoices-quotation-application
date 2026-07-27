@@ -33,7 +33,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await connectDb();
     const { id } = await params;
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const rawCompanyId = req.nextUrl.searchParams.get("companyId");
+    const companyId = rawCompanyId && rawCompanyId !== "all" ? rawCompanyId : null;
 
     const client = await Client.findById(id).lean();
     if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });

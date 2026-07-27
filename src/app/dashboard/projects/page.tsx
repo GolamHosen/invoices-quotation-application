@@ -4,6 +4,8 @@ import { PROJECT_TYPES, PROJECT_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import Pagination from "@/components/Pagination";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ToastContainer from "@/components/Toast";
+import { useToast } from "@/lib/use-toast";
 
 const PAGE_SIZE = 10;
 
@@ -20,6 +22,7 @@ export default function ProjectsPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { toasts, dismiss, withToast } = useToast();
 
   const load = async (pageNum: number = page) => {
     setLoading(true);
@@ -59,32 +62,53 @@ export default function ProjectsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editProject) {
-      await fetch(`/api/projects/${editProject.id}?companyId=${encodeURIComponent(activeCompanyId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, companyId: activeCompanyId }),
-      });
-    } else {
-      await fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, companyId: activeCompanyId }),
-      });
-    }
+    const isEdit = !!editProject;
     setShowModal(false);
-    load(page);
+    await withToast({
+      loadingMessage: isEdit ? "Updating project..." : "Creating project...",
+      successMessage: isEdit ? "Project updated successfully." : "Project created successfully.",
+      errorMessage: isEdit ? "Failed to update project." : "Failed to create project.",
+      operationKey: isEdit ? `update-project-${editProject.id}` : "create-project",
+      fn: async () => {
+        if (isEdit) {
+          const r = await fetch(`/api/projects/${editProject.id}?companyId=${encodeURIComponent(activeCompanyId)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...form, companyId: activeCompanyId }),
+          });
+          if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        } else {
+          const r = await fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...form, companyId: activeCompanyId }),
+          });
+          if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        }
+        load(page);
+      },
+    });
   };
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await fetch(`/api/projects/${deleteConfirmId}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
+    const idToDelete = deleteConfirmId;
     setDeleteConfirmId(null);
-    if (projects.length === 1 && page > 1) {
-      setPage(page - 1);
-    } else {
-      load(page);
-    }
+    await withToast({
+      loadingMessage: "Deleting project...",
+      successMessage: "Project deleted successfully.",
+      errorMessage: "Failed to delete project.",
+      operationKey: `delete-project-${idToDelete}`,
+      fn: async () => {
+        const r = await fetch(`/api/projects/${idToDelete}?companyId=${encodeURIComponent(activeCompanyId)}`, { method: "DELETE" });
+        if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        if (projects.length === 1 && page > 1) {
+          setPage(page - 1);
+        } else {
+          load(page);
+        }
+      },
+    });
   };
 
   const statusColors: Record<string, string> = { pending: "bg-gray-100 text-gray-700", in_progress: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700", on_hold: "bg-amber-100 text-amber-700", cancelled: "bg-red-100 text-red-700" };
@@ -160,6 +184,7 @@ export default function ProjectsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

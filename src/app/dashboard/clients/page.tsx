@@ -4,6 +4,8 @@ import { useCompany } from "@/lib/company-context";
 import { useClients, useClientMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ToastContainer from "@/components/Toast";
+import { useToast } from "@/lib/use-toast";
 
 const PAGE_SIZE = 10;
 
@@ -25,6 +27,7 @@ export default function ClientsPage() {
   });
 
   const { createClient, updateClient, deleteClient } = useClientMutations();
+  const { toasts, dismiss, withToast } = useToast();
 
   const clients = res?.data || [];
   const totalItems = res?.total || 0;
@@ -39,21 +42,39 @@ export default function ClientsPage() {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editClient) {
-      await updateClient.mutateAsync({ id: editClient.id, companyId: activeCompanyId, ...form });
-    } else {
-      await createClient.mutateAsync({ ...form, companyId: activeCompanyId });
-    }
+    const isEdit = !!editClient;
     setShowModal(false);
+    await withToast({
+      loadingMessage: isEdit ? "Updating client..." : "Adding client...",
+      successMessage: isEdit ? "Client updated successfully." : "Client added successfully.",
+      errorMessage: isEdit ? "Failed to update client." : "Failed to add client.",
+      operationKey: isEdit ? `update-client-${editClient.id}` : "create-client",
+      fn: async () => {
+        if (isEdit) {
+          await updateClient.mutateAsync({ id: editClient.id, companyId: activeCompanyId, ...form });
+        } else {
+          await createClient.mutateAsync({ ...form, companyId: activeCompanyId });
+        }
+      },
+    });
   };
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await deleteClient.mutateAsync({ id: deleteConfirmId, companyId: activeCompanyId });
+    const idToDelete = deleteConfirmId;
     setDeleteConfirmId(null);
-    if (clients.length === 1 && page > 1) {
-      setPage(page - 1);
-    }
+    await withToast({
+      loadingMessage: "Deleting client...",
+      successMessage: "Client deleted successfully.",
+      errorMessage: "Failed to delete client.",
+      operationKey: `delete-client-${idToDelete}`,
+      fn: async () => {
+        await deleteClient.mutateAsync({ id: idToDelete, companyId: activeCompanyId });
+        if (clients.length === 1 && page > 1) {
+          setPage(page - 1);
+        }
+      },
+    });
   };
 
   const handleSearchChange = (value: string) => {
@@ -142,6 +163,7 @@ export default function ClientsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }
