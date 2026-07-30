@@ -96,7 +96,7 @@ export async function processPaymentReminders(options?: {
 
     const company = await Company.findById(client.companyId).lean();
     const companyName = company?.companyName || "Hujurat Construction Pty Ltd";
-    const intervalDays = client.reminderIntervalDays || 7;
+    const intervalDays: number = Number(client.reminderIntervalDays) || 7;
 
     const subject = `Payment Reminder: Unpaid Invoices for ${client.name}`;
 

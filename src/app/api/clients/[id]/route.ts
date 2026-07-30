@@ -32,14 +32,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       updateData.reminderIntervalDays = parseInt(body.reminderIntervalDays, 10) || 7;
     }
 
-    const isEnabled = updateData.autoRemindersEnabled !== undefined ? updateData.autoRemindersEnabled : existing.autoRemindersEnabled;
-    const intervalDays = (updateData.reminderIntervalDays !== undefined ? updateData.reminderIntervalDays : existing.reminderIntervalDays) || 7;
+    const isEnabled = updateData.autoRemindersEnabled !== undefined ? Boolean(updateData.autoRemindersEnabled) : Boolean(existing.autoRemindersEnabled);
+    const rawInterval = updateData.reminderIntervalDays !== undefined ? updateData.reminderIntervalDays : existing.reminderIntervalDays;
+    const intervalDays: number = typeof rawInterval === "number" ? rawInterval : parseInt(String(rawInterval || "7"), 10) || 7;
 
     if (!isEnabled) {
       updateData.nextReminderDueAt = null;
     } else if (body.autoRemindersEnabled === true || body.reminderIntervalDays !== undefined) {
       const baseDate = existing.lastReminderSentAt ? new Date(existing.lastReminderSentAt) : new Date();
-      const nextDue = new Date(baseDate.getTime() + (intervalDays * 24 * 60 * 60 * 1000));
+      const nextDue = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000);
       updateData.nextReminderDueAt = nextDue;
     }
 
