@@ -1,8 +1,8 @@
 import nodemailer from "nodemailer";
 import { connectDb } from "@/db";
-import { Quotation, Invoice, Client, Project, Company } from "@/db/schema";
+import { Quotation, Invoice, Client, Project, Company, EmailLog } from "@/db/schema";
 import { generateQuotationPdf, generateInvoicePdf } from "@/lib/pdf";
-import { formatDate, PROJECT_TYPES } from "@/lib/utils";
+import { formatDate, PROJECT_TYPES, generateId } from "@/lib/utils";
 import { getLogoDataUrl } from "@/lib/ensure-logo";
 
 function createTransporter() {
@@ -10,6 +10,8 @@ function createTransporter() {
   const port = parseInt(process.env.SMTP_PORT || "587", 10);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
+  const secureEnv = process.env.SMTP_SECURE;
+  const secure = secureEnv !== undefined ? secureEnv === "true" : port === 465;
 
   if (!host || !user || !pass) {
     throw new Error("SMTP credentials not configured. Please set SMTP_HOST, SMTP_USER, and SMTP_PASS in .env.local");
@@ -18,7 +20,7 @@ function createTransporter() {
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure,
     auth: { user, pass },
   });
 }
@@ -141,28 +143,61 @@ export async function sendQuotationEmail(
     </div>
   `;
 
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from: getFromAddress(),
-    to: recipientEmail,
-    subject,
-    text: messageBody,
-    html: htmlBody,
-    attachments: [
-      {
-        filename: `quotation-${q.quotationNumber}.pdf`,
-        content: pdfBuffer,
-        contentType: "application/pdf",
-      },
-    ],
-  });
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: recipientEmail,
+      subject,
+      text: messageBody,
+      html: htmlBody,
+      attachments: [
+        {
+          filename: `quotation-${q.quotationNumber}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
 
-  // Update status to "sent" if currently "draft"
-  if (q.status === "draft") {
-    await Quotation.findByIdAndUpdate(quotationId, { status: "sent", updatedAt: new Date() });
+    // Update status to "sent" if currently "draft"
+    if (q.status === "draft") {
+      await Quotation.findByIdAndUpdate(quotationId, { status: "sent", updatedAt: new Date() });
+    }
+
+    // Log to EmailLog
+    await EmailLog.create({
+      _id: generateId(),
+      companyId: q.companyId,
+      type: "quotation",
+      documentId: quotationId,
+      documentNumber: q.quotationNumber,
+      recipientEmail,
+      recipientName: client?.name,
+      subject,
+      message: messageBody,
+      status: "sent",
+      sentAt: new Date(),
+    });
+
+    return { success: true, sentTo: recipientEmail };
+  } catch (err: any) {
+    await EmailLog.create({
+      _id: generateId(),
+      companyId: q.companyId,
+      type: "quotation",
+      documentId: quotationId,
+      documentNumber: q.quotationNumber,
+      recipientEmail,
+      recipientName: client?.name,
+      subject,
+      message: messageBody,
+      status: "failed",
+      errorMessage: err?.message || "Failed to send email",
+      sentAt: new Date(),
+    }).catch(() => {});
+    throw err;
   }
-
-  return { success: true, sentTo: recipientEmail };
 }
 
 export async function sendInvoiceEmail(
@@ -251,26 +286,59 @@ export async function sendInvoiceEmail(
     </div>
   `;
 
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from: getFromAddress(),
-    to: recipientEmail,
-    subject,
-    text: messageBody,
-    html: htmlBody,
-    attachments: [
-      {
-        filename: `invoice-${inv.invoiceNumber}.pdf`,
-        content: pdfBuffer,
-        contentType: "application/pdf",
-      },
-    ],
-  });
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: recipientEmail,
+      subject,
+      text: messageBody,
+      html: htmlBody,
+      attachments: [
+        {
+          filename: `invoice-${inv.invoiceNumber}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
 
-  // Update status to "sent" if currently "draft"
-  if (inv.status === "draft") {
-    await Invoice.findByIdAndUpdate(invoiceId, { status: "sent", updatedAt: new Date() });
+    // Update status to "sent" if currently "draft"
+    if (inv.status === "draft") {
+      await Invoice.findByIdAndUpdate(invoiceId, { status: "sent", updatedAt: new Date() });
+    }
+
+    // Log to EmailLog
+    await EmailLog.create({
+      _id: generateId(),
+      companyId: inv.companyId,
+      type: "invoice",
+      documentId: invoiceId,
+      documentNumber: inv.invoiceNumber,
+      recipientEmail,
+      recipientName: client?.name,
+      subject,
+      message: messageBody,
+      status: "sent",
+      sentAt: new Date(),
+    });
+
+    return { success: true, sentTo: recipientEmail };
+  } catch (err: any) {
+    await EmailLog.create({
+      _id: generateId(),
+      companyId: inv.companyId,
+      type: "invoice",
+      documentId: invoiceId,
+      documentNumber: inv.invoiceNumber,
+      recipientEmail,
+      recipientName: client?.name,
+      subject,
+      message: messageBody,
+      status: "failed",
+      errorMessage: err?.message || "Failed to send email",
+      sentAt: new Date(),
+    }).catch(() => {});
+    throw err;
   }
-
-  return { success: true, sentTo: recipientEmail };
 }

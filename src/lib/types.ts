@@ -34,6 +34,10 @@ export type Client = {
   email: string | null;
   address: string | null;
   notes: string | null;
+  autoRemindersEnabled?: boolean;
+  reminderIntervalDays?: number;
+  lastReminderSentAt?: string | Date | null;
+  nextReminderDueAt?: string | Date | null;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +91,13 @@ export type Quotation = {
   updatedAt: Date;
 };
 
+export type PaymentRecord = {
+  id: string;
+  amount: number;
+  date: string | Date;
+  note?: string;
+};
+
 export type Invoice = {
   id: string;
   companyId: string;
@@ -102,6 +113,7 @@ export type Invoice = {
   gstAmount: string;
   totalAmount: string;
   paidAmount: string;
+  payments?: PaymentRecord[];
   paymentTerms: string | null;
   notes: string | null;
   createdBy: string | null;

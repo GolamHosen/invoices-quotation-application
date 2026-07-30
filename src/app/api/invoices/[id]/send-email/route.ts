@@ -13,6 +13,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error("Send invoice email error:", error);
     const message = error?.message || "Failed to send email";
 
+    if (error?.code === "EAUTH" || message.includes("535") || message.includes("Authentication Failed")) {
+      return NextResponse.json(
+        { error: "SMTP Authentication Failed (535). Please check your SMTP username, password / app password, or host in .env.local." },
+        { status: 400 }
+      );
+    }
+
     if (message.includes("not found")) {
       return NextResponse.json({ error: message }, { status: 404 });
     }

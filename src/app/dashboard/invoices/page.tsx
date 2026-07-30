@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { formatCurrency, formatDate, INVOICE_STATUSES } from "@/lib/utils";
+import { formatCurrency, formatDate, INVOICE_STATUSES, generateId } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import { useInvoices, useInvoiceMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
@@ -115,6 +115,140 @@ function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, on
   );
 }
 
+function RecordPaymentModal({
+  invoice,
+  onClose,
+  onSave,
+}: {
+  invoice: any;
+  onClose: () => void;
+  onSave: (paymentData: { amount: number; date: string; note: string }) => Promise<void>;
+}) {
+  const total = parseFloat(invoice.totalAmount || "0");
+  const paid = parseFloat(invoice.paidAmount || "0");
+  const balance = Math.max(0, total - paid);
+
+  const [amount, setAmount] = useState(balance > 0 ? balance.toString() : "");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError("Please enter a valid payment amount greater than 0.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onSave({ amount: parsedAmount, date, note });
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Failed to record payment");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Record Payment</h3>
+              <p className="text-sm text-gray-500">{invoice.invoiceNumber}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex justify-between items-center text-sm">
+            <div>
+              <span className="text-gray-500 block text-xs">Total Amount</span>
+              <span className="font-semibold text-gray-900">{formatCurrency(total)}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-gray-500 block text-xs">Balance Due</span>
+              <span className="font-bold text-blue-700">{formatCurrency(balance)}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date *</label>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid ($) *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-500 text-sm">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                required
+                placeholder="0.00"
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Note / Reference (Optional)</label>
+            <input
+              type="text"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Bank Transfer, Cheque #104, Direct Deposit"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {error}
+            </div>
+          )}
+
+          <div className="pt-2 flex items-center justify-end gap-3 border-t border-gray-200">
+            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2">
+              {saving ? (
+                <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Saving...</>
+              ) : (
+                <>Record Payment</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const PAGE_SIZE = 10;
 
 function InvoicesContent() {
@@ -123,6 +257,8 @@ function InvoicesContent() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [emailModal, setEmailModal] = useState<any>(null);
+  const [paymentModalInvoice, setPaymentModalInvoice] = useState<any>(null);
+  const [paymentSortOrder, setPaymentSortOrder] = useState<"desc" | "asc">("desc");
   const [page, setPage] = useState(1);
   const [companySettings, setCompanySettings] = useState<any>(null);
 
@@ -164,12 +300,62 @@ function InvoicesContent() {
     setDeleteConfirmId(null);
   };
 
-  const handleRecordPayment = async (id: string, currentPaid: number, total: number) => {
-    const amount = prompt(`Enter payment amount (Balance: ${formatCurrency(total - currentPaid)}):`);
-    if (!amount) return;
-    const newPaid = currentPaid + parseFloat(amount);
-    const newStatus = newPaid >= total ? "paid" : "partially_paid";
-    await updateStatus.mutateAsync({ id, paidAmount: newPaid, status: newStatus });
+  const handleSavePayment = async (paymentData: { amount: number; date: string; note: string }) => {
+    if (!paymentModalInvoice) return;
+    const inv = paymentModalInvoice;
+    const existingPayments = inv.payments || [];
+    const newPayment = {
+      id: generateId(),
+      amount: paymentData.amount,
+      date: paymentData.date,
+      note: paymentData.note,
+    };
+    const updatedPayments = [...existingPayments, newPayment];
+    const newPaid = updatedPayments.reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+    const total = parseFloat(inv.totalAmount || "0");
+    const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partially_paid" : "sent";
+
+    await updateStatus.mutateAsync({
+      id: inv.id,
+      paidAmount: newPaid.toString(),
+      payments: updatedPayments,
+      status: newStatus,
+    });
+
+    const updatedInv = {
+      ...inv,
+      paidAmount: newPaid.toString(),
+      payments: updatedPayments,
+      status: newStatus,
+    };
+
+    if (viewInvoice && viewInvoice.id === inv.id) {
+      setViewInvoice(updatedInv);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!viewInvoice) return;
+    const existingPayments = viewInvoice.payments || [];
+    const updatedPayments = existingPayments.filter((p: any) => p.id !== paymentId);
+    const newPaid = updatedPayments.reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+    const total = parseFloat(viewInvoice.totalAmount || "0");
+    const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partially_paid" : "sent";
+
+    await updateStatus.mutateAsync({
+      id: viewInvoice.id,
+      paidAmount: newPaid.toString(),
+      payments: updatedPayments,
+      status: newStatus,
+    });
+
+    const updatedInv = {
+      ...viewInvoice,
+      paidAmount: newPaid.toString(),
+      payments: updatedPayments,
+      status: newStatus,
+    };
+    setViewInvoice(updatedInv);
   };
 
   const handleDuplicate = async (inv: any) => {
@@ -217,7 +403,8 @@ function InvoicesContent() {
                       <a href={`/api/invoices/${inv.id}/pdf`} target="_blank" className="text-blue-600 hover:text-blue-800 text-sm mr-2">PDF</a>
                       <button onClick={() => setEmailModal({ id: inv.id, number: inv.invoiceNumber, clientEmail: inv.clientEmail, clientName: inv.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(inv)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
-                      {inv.status !== "paid" && <button onClick={() => handleRecordPayment(inv.id, parseFloat(inv.paidAmount || "0"), parseFloat(inv.totalAmount || "0"))} className="text-green-600 hover:text-green-800 text-sm mr-2">Pay</button>}
+                      {inv.status !== "paid" && <button onClick={() => setPaymentModalInvoice(inv)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">Pay</button>}
+                      <a href={`/dashboard/invoices/${inv.id}/edit`} className="text-amber-600 hover:text-amber-800 text-sm mr-2">Edit</a>
                       <button onClick={() => setDeleteConfirmId(inv.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>
@@ -298,9 +485,127 @@ function InvoicesContent() {
                 <div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-bold">{formatCurrency(viewInvoice.totalAmount)}</span></div>
                 {parseFloat(viewInvoice.paidAmount) > 0 && <><div className="flex justify-between text-green-600"><span>Paid</span><span>-{formatCurrency(viewInvoice.paidAmount)}</span></div><div className="flex justify-between text-lg font-bold text-[#1e3a5f] pt-2 border-t border-gray-200"><span>Balance Due</span><span>{formatCurrency(parseFloat(viewInvoice.totalAmount) - parseFloat(viewInvoice.paidAmount))}</span></div></>}
               </div>
+
+              {/* Payment History Section */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm mt-6">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center text-green-700">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm text-gray-900">Payment History</h3>
+                      <p className="text-xs text-gray-500">
+                        {(viewInvoice.payments || []).length} payment{(viewInvoice.payments || []).length !== 1 ? "s" : ""} recorded
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentSortOrder(s => (s === "desc" ? "asc" : "desc"))}
+                      className="px-2.5 py-1 text-xs bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition flex items-center gap-1 font-medium"
+                      title="Toggle chronological sorting"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                      <span>{paymentSortOrder === "desc" ? "Newest First" : "Oldest First"}</span>
+                    </button>
+
+                    {viewInvoice.status !== "paid" && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentModalInvoice(viewInvoice)}
+                        className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-1"
+                      >
+                        <span>+ Record Payment</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(() => {
+                  const rawPayments = viewInvoice.payments || [];
+                  const paymentsList = [...rawPayments];
+                  if (paymentsList.length === 0 && parseFloat(viewInvoice.paidAmount || "0") > 0) {
+                    paymentsList.push({
+                      id: "initial-payment",
+                      amount: parseFloat(viewInvoice.paidAmount),
+                      date: viewInvoice.updatedAt || viewInvoice.createdAt,
+                      note: "Initial Payment Record",
+                    });
+                  }
+
+                  const sortedPayments = paymentsList.sort((a: any, b: any) => {
+                    const timeA = new Date(a.date).getTime();
+                    const timeB = new Date(b.date).getTime();
+                    return paymentSortOrder === "desc" ? timeB - timeA : timeA - timeB;
+                  });
+
+                  if (sortedPayments.length === 0) {
+                    return (
+                      <div className="p-6 text-center text-gray-400 text-sm">
+                        No payments recorded yet for this invoice.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50/50 border-b border-gray-200 text-xs text-gray-500 uppercase">
+                            <th className="text-left px-4 py-2 font-semibold">Payment Date</th>
+                            <th className="text-right px-4 py-2 font-semibold">Amount Paid</th>
+                            <th className="text-left px-4 py-2 font-semibold">Note / Reference</th>
+                            <th className="text-right px-4 py-2 font-semibold w-16">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {sortedPayments.map((p: any) => (
+                            <tr key={p.id} className="hover:bg-gray-50/50">
+                              <td className="px-4 py-2.5 text-gray-700 font-medium whitespace-nowrap">
+                                {formatDate(p.date)}
+                              </td>
+                              <td className="px-4 py-2.5 text-right font-semibold text-green-700 whitespace-nowrap">
+                                {formatCurrency(p.amount)}
+                              </td>
+                              <td className="px-4 py-2.5 text-gray-600 text-xs">
+                                {p.note || <span className="text-gray-400 italic">No notes</span>}
+                              </td>
+                              <td className="px-4 py-2.5 text-right">
+                                {p.id !== "initial-payment" && (
+                                  <button
+                                    onClick={() => handleDeletePayment(p.id)}
+                                    className="text-red-500 hover:text-red-700 text-xs font-medium"
+                                    title="Delete payment entry"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>
+      )}
+      {paymentModalInvoice && (
+        <RecordPaymentModal
+          invoice={paymentModalInvoice}
+          onClose={() => setPaymentModalInvoice(null)}
+          onSave={handleSavePayment}
+        />
       )}
       {emailModal && (
         <SendEmailModal

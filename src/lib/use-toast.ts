@@ -23,6 +23,18 @@ export function useToast() {
   }, []);
 
   /**
+   * Directly add a toast item.
+   */
+  const addToast = useCallback(
+    ({ type, message }: { type: ToastType; message: string }): string => {
+      const id = generateToastId();
+      setToasts((prev) => [...prev, { id, type, message }]);
+      return id;
+    },
+    []
+  );
+
+  /**
    * Show a loading toast. Returns a toastId that can be used to
    * transition to success/error via `updateToast`.
    * 
@@ -88,5 +100,5 @@ export function useToast() {
     [showLoading, updateToast]
   );
 
-  return { toasts, dismiss, showLoading, updateToast, withToast };
+  return { toasts, dismiss, showLoading, updateToast, withToast, addToast };
 }

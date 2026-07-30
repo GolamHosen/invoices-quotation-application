@@ -237,6 +237,7 @@ function QuotationsContent() {
                       <button onClick={() => setEmailModal({ id: q.id, number: q.quotationNumber, clientEmail: q.clientEmail, clientName: q.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(q)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
                       {q.status === "approved" && <button onClick={() => setConvertConfirmId(q.id)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">→ Invoice</button>}
+                      <a href={`/dashboard/quotations/${q.id}/edit`} className="text-amber-600 hover:text-amber-800 text-sm mr-2">Edit</a>
                       <button onClick={() => setDeleteConfirmId(q.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
                   </tr>

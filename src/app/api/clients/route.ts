@@ -45,7 +45,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
     const id = generateId();
-    await Client.create({ _id: id, companyId: body.companyId, name: body.name, companyName: body.companyName, phone: body.phone, email: body.email, address: body.address, notes: body.notes, createdBy: body.createdBy });
+    const autoRemindersEnabled = !!body.autoRemindersEnabled;
+    const reminderIntervalDays = parseInt(body.reminderIntervalDays || "7", 10) || 7;
+
+    let nextReminderDueAt = null;
+    if (autoRemindersEnabled) {
+      const due = new Date();
+      due.setDate(due.getDate() + reminderIntervalDays);
+      nextReminderDueAt = due;
+    }
+
+    await Client.create({
+      _id: id,
+      companyId: body.companyId,
+      name: body.name,
+      companyName: body.companyName,
+      phone: body.phone,
+      email: body.email,
+      address: body.address,
+      notes: body.notes,
+      autoRemindersEnabled,
+      reminderIntervalDays,
+      nextReminderDueAt,
+      createdBy: body.createdBy,
+    });
     const result = await Client.findById(id).lean();
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

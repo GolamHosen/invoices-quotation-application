@@ -20,7 +20,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await connectDb();
     const { id } = await params;
     const body = await req.json();
-    await Client.findByIdAndUpdate(id, { ...body, updatedAt: new Date() });
+    const existing = await Client.findById(id).lean();
+    if (!existing) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+
+    const updateData: Record<string, unknown> = { ...body, updatedAt: new Date() };
+
+    if (body.autoRemindersEnabled !== undefined) {
+      updateData.autoRemindersEnabled = !!body.autoRemindersEnabled;
+    }
+    if (body.reminderIntervalDays !== undefined) {
+      updateData.reminderIntervalDays = parseInt(body.reminderIntervalDays, 10) || 7;
+    }
+
+    const isEnabled = updateData.autoRemindersEnabled !== undefined ? updateData.autoRemindersEnabled : existing.autoRemindersEnabled;
+    const intervalDays = (updateData.reminderIntervalDays !== undefined ? updateData.reminderIntervalDays : existing.reminderIntervalDays) || 7;
+
+    if (!isEnabled) {
+      updateData.nextReminderDueAt = null;
+    } else if (body.autoRemindersEnabled === true || body.reminderIntervalDays !== undefined) {
+      const baseDate = existing.lastReminderSentAt ? new Date(existing.lastReminderSentAt) : new Date();
+      const nextDue = new Date(baseDate.getTime() + (intervalDays * 24 * 60 * 60 * 1000));
+      updateData.nextReminderDueAt = nextDue;
+    }
+
+    await Client.findByIdAndUpdate(id, updateData);
     const result = await Client.findById(id).lean();
     return NextResponse.json(result);
   } catch (error) {

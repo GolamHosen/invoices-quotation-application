@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export type ToastType = "loading" | "success" | "error";
+export type ToastType = "loading" | "success" | "error" | "info";
 
 export interface ToastItem {
   id: string;
@@ -37,6 +37,17 @@ function ToastIcon({ type }: { type: ToastType }) {
     );
   }
 
+  if (type === "info") {
+    return (
+      <div className="w-5 h-5 shrink-0 rounded-full bg-blue-500 flex items-center justify-center animate-[scaleIn_0.2s_ease-out]">
+        <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="6" cy="3.5" r="0.5" fill="currentColor" />
+          <line x1="6" y1="5.5" x2="6" y2="9" />
+        </svg>
+      </div>
+    );
+  }
+
   // error
   return (
     <div className="w-5 h-5 shrink-0 rounded-full bg-red-500 flex items-center justify-center animate-[scaleIn_0.2s_ease-out]">
@@ -51,10 +62,10 @@ function SingleToast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: s
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (toast.type === "success" || toast.type === "error") {
+    if (toast.type === "success" || toast.type === "error" || toast.type === "info") {
       timerRef.current = setTimeout(() => {
         onDismiss(toast.id);
-      }, toast.type === "success" ? 3000 : 5000);
+      }, toast.type === "success" ? 3000 : toast.type === "info" ? 4000 : 5000);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -66,6 +77,8 @@ function SingleToast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: s
       ? "bg-white border-gray-200"
       : toast.type === "success"
       ? "bg-white border-emerald-200"
+      : toast.type === "info"
+      ? "bg-white border-blue-200"
       : "bg-white border-red-200";
 
   const textClass =
@@ -73,6 +86,8 @@ function SingleToast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: s
       ? "text-gray-700"
       : toast.type === "success"
       ? "text-emerald-800"
+      : toast.type === "info"
+      ? "text-blue-800"
       : "text-red-800";
 
   return (

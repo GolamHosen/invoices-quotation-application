@@ -156,14 +156,16 @@ export function useInvoices(params: {
   page?: number;
   limit?: number;
   status?: string;
+  clientId?: string;
   companyId?: string;
   quotationId?: string;
 }) {
-  const { page = 1, limit = 10, status, companyId, quotationId } = params;
+  const { page = 1, limit = 10, status, clientId, companyId, quotationId } = params;
   const qParams = {
     page,
     limit,
     ...(status ? { status } : {}),
+    ...(clientId ? { clientId } : {}),
     ...(companyId ? { companyId } : {}),
     ...(quotationId ? { quotationId } : {}),
   };

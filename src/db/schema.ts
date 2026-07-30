@@ -21,6 +21,10 @@ export interface IClient {
   email?: string;
   address?: string;
   notes?: string;
+  autoRemindersEnabled?: boolean;
+  reminderIntervalDays?: number;
+  lastReminderSentAt?: Date;
+  nextReminderDueAt?: Date;
   createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -74,6 +78,13 @@ export interface IQuotation {
   updatedAt: Date;
 }
 
+export type PaymentRecord = {
+  id: string;
+  amount: number;
+  date: Date;
+  note?: string;
+};
+
 export interface IInvoice {
   _id: string;
   companyId: string;
@@ -89,6 +100,7 @@ export interface IInvoice {
   gstAmount: string;
   totalAmount: string;
   paidAmount: string;
+  payments?: PaymentRecord[];
   paymentTerms?: string;
   notes?: string;
   createdBy?: string;
@@ -153,6 +165,23 @@ export interface IAuditLog {
   entityId?: string;
   details?: Record<string, unknown>;
   createdAt: Date;
+}
+
+export interface IEmailLog {
+  _id: string;
+  companyId: string;
+  type: "quotation" | "invoice";
+  documentId: string;
+  documentNumber: string;
+  recipientEmail: string;
+  recipientName?: string;
+  subject: string;
+  message?: string;
+  status: "sent" | "failed";
+  errorMessage?: string;
+  sentAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // ===== Shared Types =====
@@ -271,6 +300,10 @@ const ClientSchema = new Schema<IClient>({
   email: { type: String, maxlength: 255 },
   address: { type: String },
   notes: { type: String },
+  autoRemindersEnabled: { type: Boolean, default: false },
+  reminderIntervalDays: { type: Number, default: 7 },
+  lastReminderSentAt: { type: Date },
+  nextReminderDueAt: { type: Date },
   createdBy: { type: String },
 }, { timestamps: true, _id: false });
 ClientSchema.index({ companyId: 1, createdAt: -1 });
@@ -336,6 +369,13 @@ QuotationSchema.index({ companyId: 1, status: 1, createdAt: -1 });
 QuotationSchema.index({ clientId: 1 });
 QuotationSchema.index({ projectId: 1 });
 
+const PaymentRecordSchema = new Schema<PaymentRecord>({
+  id: { type: String, required: true },
+  amount: { type: Number, required: true },
+  date: { type: Date, default: Date.now, required: true },
+  note: { type: String },
+}, { _id: false });
+
 const InvoiceSchema = new Schema<IInvoice>({
   _id: { type: String, required: true },
   companyId: { type: String, required: true, index: true },
@@ -351,6 +391,7 @@ const InvoiceSchema = new Schema<IInvoice>({
   gstAmount: { type: String, required: true, default: "0" },
   totalAmount: { type: String, required: true, default: "0" },
   paidAmount: { type: String, required: true, default: "0" },
+  payments: { type: [PaymentRecordSchema], default: [] },
   paymentTerms: { type: String },
   notes: { type: String },
   createdBy: { type: String },
@@ -419,6 +460,23 @@ const AuditLogSchema = new Schema<IAuditLog>({
 }, { timestamps: true, _id: false });
 AuditLogSchema.index({ createdAt: -1 });
 
+const EmailLogSchema = new Schema<IEmailLog>({
+  _id: { type: String, required: true },
+  companyId: { type: String, required: true, index: true },
+  type: { type: String, enum: ["quotation", "invoice"], required: true },
+  documentId: { type: String, required: true },
+  documentNumber: { type: String, required: true },
+  recipientEmail: { type: String, required: true },
+  recipientName: { type: String },
+  subject: { type: String, required: true },
+  message: { type: String },
+  status: { type: String, enum: ["sent", "failed"], required: true, default: "sent" },
+  errorMessage: { type: String },
+  sentAt: { type: Date, default: Date.now, required: true },
+}, { timestamps: true, _id: false });
+EmailLogSchema.index({ companyId: 1, sentAt: -1 });
+EmailLogSchema.index({ recipientEmail: 1 });
+
 // ===== Models =====
 
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
@@ -432,3 +490,4 @@ export const Company: Model<ICompany> = mongoose.models.Company || mongoose.mode
 export const CompanySettings: Model<ICompany> = mongoose.models.CompanySettings || mongoose.model<ICompany>("CompanySettings", CompanySettingsSchema);
 export const TemplateSectionOption: Model<ITemplateSectionOption> = mongoose.models.TemplateSectionOption || mongoose.model<ITemplateSectionOption>("TemplateSectionOption", TemplateSectionOptionSchema);
 export const AuditLog: Model<IAuditLog> = mongoose.models.AuditLog || mongoose.model<IAuditLog>("AuditLog", AuditLogSchema);
+export const EmailLog: Model<IEmailLog> = mongoose.models.EmailLog || mongoose.model<IEmailLog>("EmailLog", EmailLogSchema);
