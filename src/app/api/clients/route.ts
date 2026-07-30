@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const autoRemindersEnabled = !!body.autoRemindersEnabled;
     const reminderIntervalDays = parseInt(body.reminderIntervalDays || "7", 10) || 7;
 
-    let nextReminderDueAt = null;
+    let nextReminderDueAt: Date | undefined = undefined;
     if (autoRemindersEnabled) {
       const due = new Date();
       due.setDate(due.getDate() + reminderIntervalDays);
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       notes: body.notes,
       autoRemindersEnabled,
       reminderIntervalDays,
-      nextReminderDueAt,
+      ...(nextReminderDueAt ? { nextReminderDueAt } : {}),
       createdBy: body.createdBy,
     });
     const result = await Client.findById(id).lean();

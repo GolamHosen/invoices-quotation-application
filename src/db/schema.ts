@@ -23,8 +23,8 @@ export interface IClient {
   notes?: string;
   autoRemindersEnabled?: boolean;
   reminderIntervalDays?: number;
-  lastReminderSentAt?: Date;
-  nextReminderDueAt?: Date;
+  lastReminderSentAt?: Date | null;
+  nextReminderDueAt?: Date | null;
   createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
