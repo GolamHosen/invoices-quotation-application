@@ -12,6 +12,7 @@ export default function NewQuotationPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [dataLoading, setDataLoading] = useState(true);
   const [form, setForm] = useState({
     clientId: "",
     projectId: "",
@@ -29,6 +30,7 @@ export default function NewQuotationPage() {
   });
 
   useEffect(() => {
+    setDataLoading(true);
     // Use limit=1000 to fetch all records for dropdown selections
     Promise.all([
       fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then(r => r.json()),
@@ -42,6 +44,8 @@ export default function NewQuotationPage() {
       setTemplates(tl.data || tl);
       setSettings(st);
       if (st.defaultTerms) setForm((f) => ({ ...f, termsAndConditions: st.defaultTerms }));
+    }).finally(() => {
+      setDataLoading(false);
     });
   }, [activeCompanyId]);
 
@@ -148,19 +152,31 @@ export default function NewQuotationPage() {
       {step === 1 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold mb-4">Select Client</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {clients.map((c: any, index: number) => (
-              <button
-                key={c.id ?? c.email ?? c.phone ?? c.name ?? `client-${index}`}
-                onClick={() => { setForm(f => ({ ...f, clientId: c.id, projectId: "" })); setStep(2); }}
-                className={`p-4 rounded-xl border-2 text-left transition ${form.clientId === c.id ? "border-[#1e3a5f] bg-blue-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}
-              >
-                <div className="font-medium text-gray-900">{c.name}</div>
-                {c.companyName && <div className="text-sm text-gray-500">{c.companyName}</div>}
-                {c.email && <div className="text-xs text-gray-400 mt-1">{c.email}</div>}
-              </button>
-            ))}
-          </div>
+          {dataLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 animate-pulse">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-4 rounded-xl border-2 border-gray-200 space-y-2">
+                  <div className="h-5 w-32 bg-gray-200 rounded" />
+                  <div className="h-4 w-24 bg-gray-100 rounded" />
+                  <div className="h-3 w-40 bg-gray-50 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {clients.map((c: any, index: number) => (
+                <button
+                  key={c.id ?? c.email ?? c.phone ?? c.name ?? `client-${index}`}
+                  onClick={() => { setForm(f => ({ ...f, clientId: c.id, projectId: "" })); setStep(2); }}
+                  className={`p-4 rounded-xl border-2 text-left transition ${form.clientId === c.id ? "border-[#1e3a5f] bg-blue-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}
+                >
+                  <div className="font-medium text-gray-900">{c.name}</div>
+                  {c.companyName && <div className="text-sm text-gray-500">{c.companyName}</div>}
+                  {c.email && <div className="text-xs text-gray-400 mt-1">{c.email}</div>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
