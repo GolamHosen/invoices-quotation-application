@@ -50,6 +50,60 @@ export default function NewQuotationPage() {
   }, [activeCompanyId]);
 
   const clientProjects = projects.filter((p: any) => p.clientId === form.clientId);
+
+  // Project search & inline creation state
+  const [projectSearch, setProjectSearch] = useState("");
+  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
+  const [newProject, setNewProject] = useState({ name: "", type: "", address: "" });
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [newProjectError, setNewProjectError] = useState("");
+
+  const filteredClientProjects = projectSearch.trim()
+    ? clientProjects.filter((p: any) =>
+        p.name.toLowerCase().includes(projectSearch.toLowerCase())
+      )
+    : clientProjects;
+
+  const handleCreateProject = async () => {
+    setNewProjectError("");
+    if (!newProject.name.trim()) { setNewProjectError("Project name is required."); return; }
+    if (!newProject.type) { setNewProjectError("Please select a project type."); return; }
+
+    setCreatingProject(true);
+    try {
+      const resp = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: activeCompanyId,
+          clientId: form.clientId,
+          name: newProject.name.trim(),
+          type: newProject.type,
+          address: newProject.address.trim(),
+          status: "pending",
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create project");
+      }
+      const created = await resp.json();
+      const createdProject = { ...created, id: created._id || created.id };
+      // Add to local projects state
+      setProjects(prev => [createdProject, ...prev]);
+      // Auto-select the new project and go to step 3
+      setForm(f => ({ ...f, projectId: createdProject.id, templateId: "" }));
+      setShowNewProjectForm(false);
+      setProjectSearch("");
+      setNewProject({ name: "", type: "", address: "" });
+      setStep(3);
+    } catch (err: any) {
+      setNewProjectError(err.message || "Failed to create project");
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
   const filteredTemplates = form.projectId ? templates.filter((t: any) => { const proj = projects.find((p: any) => p.id === form.projectId); return proj && t.projectType === proj.type; }) : templates;
 
   const loadTemplate = (templateId: string) => {
@@ -183,23 +237,170 @@ export default function NewQuotationPage() {
       {/* Step 2: Project */}
       {step === 2 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Select Project</h2>
-          {clientProjects.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <p>No projects found for this client.</p>
-              <p className="text-sm mt-2">Please create a project first.</p>
-              <button onClick={() => router.push("/dashboard/projects")} className="mt-4 px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm">Go to Projects</button>
+          <h2 className="text-lg font-semibold mb-4">Select or Create Project</h2>
+
+          {/* Search input */}
+          <div className="relative mb-4">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              type="text"
+              value={projectSearch}
+              onChange={e => setProjectSearch(e.target.value)}
+              placeholder="Search or type a new project name..."
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f] transition"
+              autoFocus
+            />
+          </div>
+
+          {/* Filtered existing projects */}
+          {filteredClientProjects.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                {projectSearch.trim() ? "Matching Projects" : "Existing Projects"}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredClientProjects.map((p: any) => (
+                  <button key={p.id} onClick={() => { setForm(f => ({ ...f, projectId: p.id, templateId: "" })); setProjectSearch(""); setShowNewProjectForm(false); setStep(3); }}
+                    className={`p-4 rounded-xl border-2 text-left transition ${form.projectId === p.id ? "border-[#1e3a5f] bg-blue-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}>
+                    <div className="font-medium text-gray-900">{p.name}</div>
+                    <div className="text-sm text-blue-600">{PROJECT_TYPES.find(t => t.value === p.type)?.label}</div>
+                    {p.address && <div className="text-xs text-gray-400 mt-1">{p.address}</div>}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {clientProjects.map((p: any) => (
-                <button key={p.id} onClick={() => { setForm(f => ({ ...f, projectId: p.id, templateId: "" })); setStep(3); }}
-                  className={`p-4 rounded-xl border-2 text-left transition ${form.projectId === p.id ? "border-[#1e3a5f] bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}>
-                  <div className="font-medium text-gray-900">{p.name}</div>
-                  <div className="text-sm text-blue-600">{PROJECT_TYPES.find(t => t.value === p.type)?.label}</div>
-                  {p.address && <div className="text-xs text-gray-400 mt-1">{p.address}</div>}
+          )}
+
+          {/* No match message + create prompt */}
+          {projectSearch.trim() && filteredClientProjects.length === 0 && !showNewProjectForm && (
+            <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl mb-4">
+              <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              <p className="text-sm text-gray-500">No project found matching <span className="font-semibold text-gray-700">"{projectSearch}"</span></p>
+              <button
+                onClick={() => { setShowNewProjectForm(true); setNewProject(p => ({ ...p, name: projectSearch.trim() })); }}
+                className="mt-3 px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#152b48] transition inline-flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Create "{projectSearch.trim()}"
+              </button>
+            </div>
+          )}
+
+          {/* Always-visible create button when there are existing projects */}
+          {!showNewProjectForm && !projectSearch.trim() && (
+            <button
+              onClick={() => setShowNewProjectForm(true)}
+              className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#1e3a5f] hover:text-[#1e3a5f] text-sm font-medium transition flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Create New Project
+            </button>
+          )}
+
+          {/* Inline create project form */}
+          {showNewProjectForm && (
+            <div className="border-2 border-[#1e3a5f]/20 bg-blue-50/50 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#1e3a5f] flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  New Project
+                </h3>
+                <button onClick={() => setShowNewProjectForm(false)} className="text-gray-400 hover:text-gray-600 transition">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
-              ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newProject.name}
+                    onChange={e => setNewProject(p => ({ ...p, name: e.target.value }))}
+                    placeholder="e.g. Smith Residence Extension"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project Type <span className="text-red-500">*</span></label>
+                  <select
+                    value={newProject.type}
+                    onChange={e => setNewProject(p => ({ ...p, type: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                  >
+                    <option value="">Select type...</option>
+                    {PROJECT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <input
+                  type="text"
+                  value={newProject.address}
+                  onChange={e => setNewProject(p => ({ ...p, address: e.target.value }))}
+                  placeholder="e.g. 123 Main St, Sydney NSW"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                />
+              </div>
+
+              {/* Recommendation: show matching existing projects while typing */}
+              {newProject.name.trim() && (() => {
+                const matches = clientProjects.filter((p: any) =>
+                  p.name.toLowerCase().includes(newProject.name.toLowerCase())
+                );
+                if (matches.length === 0) return null;
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Similar project{matches.length > 1 ? "s" : ""} already exist{matches.length === 1 ? "s" : ""}:
+                    </p>
+                    <div className="space-y-1.5">
+                      {matches.map((p: any) => (
+                        <button key={p.id} onClick={() => { setForm(f => ({ ...f, projectId: p.id, templateId: "" })); setShowNewProjectForm(false); setProjectSearch(""); setStep(3); }}
+                          className="w-full text-left px-3 py-2 bg-white rounded-lg border border-amber-200 hover:border-[#1e3a5f] hover:bg-blue-50 transition text-sm flex items-center justify-between gap-2">
+                          <div>
+                            <span className="font-medium text-gray-900">{p.name}</span>
+                            <span className="text-gray-400 ml-2 text-xs">{PROJECT_TYPES.find(t => t.value === p.type)?.label}</span>
+                          </div>
+                          <span className="text-xs text-[#1e3a5f] font-medium whitespace-nowrap">Use this →</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {newProjectError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  {newProjectError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => setShowNewProjectForm(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+                <button
+                  onClick={handleCreateProject}
+                  disabled={creatingProject}
+                  className="px-5 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#152b48] transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {creatingProject ? (
+                    <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Creating...</>
+                  ) : (
+                    <>Create & Continue</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty state when no search and no projects */}
+          {clientProjects.length === 0 && !projectSearch.trim() && !showNewProjectForm && (
+            <div className="text-center py-6 text-gray-400 mt-2">
+              <p>No projects found for this client.</p>
+              <p className="text-sm mt-1">Create one above to continue.</p>
             </div>
           )}
         </div>

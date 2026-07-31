@@ -50,8 +50,8 @@ export function calculateGST(subtotal: number, gstRate: number = 10): number {
 
 export const PROJECT_TYPES = [
   { value: "granny_flat", label: "Granny Flat" },
-  { value: "single_storey", label: "Single Storey House" },
-  { value: "double_storey", label: "Double Storey House" },
+  { value: "single_storey", label: "Single Storey Dwelling" },
+  { value: "double_storey", label: "Double Storey Dwelling" },
   { value: "duplex", label: "Duplex" },
   { value: "townhouse", label: "Townhouse" },
   { value: "villa", label: "Villa" },
