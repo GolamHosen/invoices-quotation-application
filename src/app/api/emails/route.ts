@@ -2,6 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
 import { EmailLog } from "@/db/schema";
 
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDb();
+    const body = await req.json();
+    const ids: string[] = body.ids;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: "Please provide an array of email IDs to delete" },
+        { status: 400 }
+      );
+    }
+
+    const result = await EmailLog.deleteMany({ _id: { $in: ids } });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Delete email logs error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     await connectDb();

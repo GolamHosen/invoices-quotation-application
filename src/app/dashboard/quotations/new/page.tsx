@@ -104,7 +104,30 @@ export default function NewQuotationPage() {
     }
   };
 
-  const filteredTemplates = form.projectId ? templates.filter((t: any) => { const proj = projects.find((p: any) => p.id === form.projectId); return proj && t.projectType === proj.type; }) : templates;
+  const filteredTemplates = (() => {
+    if (!form.projectId) return templates;
+    const proj = projects.find((p: any) => p.id === form.projectId);
+    if (!proj) return templates;
+
+    // Get the label for the project's type (e.g. "Double Storey Dwelling")
+    const projTypeLabel = PROJECT_TYPES.find(t => t.value === proj.type)?.label || "";
+    // Extract meaningful keywords (skip short filler words)
+    const stopWords = new Set(["a", "an", "the", "of", "for", "and", "or", "in", "on", "to"]);
+    const keywords = projTypeLabel
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 1 && !stopWords.has(w));
+
+    if (keywords.length === 0) return templates;
+
+    return templates.filter((t: any) => {
+      // Get this template's type label
+      const tTypeLabel = (PROJECT_TYPES.find(pt => pt.value === t.projectType)?.label || "").toLowerCase();
+      const tName = (t.name || "").toLowerCase();
+      // Match if ALL keywords appear in either the template type label or template name
+      return keywords.every(kw => tTypeLabel.includes(kw) || tName.includes(kw));
+    });
+  })();
 
   const loadTemplate = (templateId: string) => {
     const template = templates.find((t: any) => t.id === templateId);
