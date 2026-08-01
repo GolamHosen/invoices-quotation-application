@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useCompany } from "@/lib/company-context";
+import { getCompanyEmailDisplayName } from "@/lib/email-sender";
 
 type SendEmailModalProps = {
   type: "quotation" | "invoice";
   id: string;
   number: string;
+  companyId?: string;
   clientEmail?: string;
   clientName?: string;
   onClose: () => void;
@@ -16,17 +19,20 @@ export default function SendEmailModal({
   type,
   id,
   number,
+  companyId,
   clientEmail,
   clientName,
   onClose,
   onSent,
 }: SendEmailModalProps) {
+  const { companies } = useCompany();
+  const companyName = getCompanyEmailDisplayName(companies.find(company => company.id === companyId));
   const [to, setTo] = useState(clientEmail || "");
   const [subject, setSubject] = useState(
-    `${type === "quotation" ? "Quotation" : "Invoice"} ${number} from Hujurat Construction`
+    `${type === "quotation" ? "Quotation" : "Invoice"} ${number} from ${companyName}`
   );
   const [message, setMessage] = useState(
-    `Dear ${clientName || "Valued Customer"},\n\nPlease find attached the ${type} ${number} for your review.\n\nIf you have any questions or require clarification, please don't hesitate to contact us.\n\nKind regards,\nHujurat Construction Pty Ltd`
+    `Dear ${clientName || "Valued Customer"},\n\nPlease find attached the ${type} ${number} for your review.\n\nIf you have any questions or require clarification, please don't hesitate to contact us.\n\nKind regards,\n${companyName}`
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");

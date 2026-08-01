@@ -4,6 +4,7 @@ import { Quotation, Invoice, Client, Project, Company, EmailLog } from "@/db/sch
 import { generateQuotationPdf, generateInvoicePdf } from "@/lib/pdf";
 import { formatDate, PROJECT_TYPES, generateId } from "@/lib/utils";
 import { getLogoDataUrl } from "@/lib/ensure-logo";
+import { getCompanyEmailDisplayName, getFromAddress } from "@/lib/email-sender";
 
 function createTransporter() {
   const host = process.env.SMTP_HOST;
@@ -23,10 +24,6 @@ function createTransporter() {
     secure,
     auth: { user, pass },
   });
-}
-
-function getFromAddress(): string {
-  return process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@example.com";
 }
 
 async function generatePdfBuffer(docDefinition: any): Promise<Buffer> {
@@ -87,7 +84,7 @@ export async function sendQuotationEmail(
     ...(settings || companyDefaults),
     logoUrl: logoDataUrl || settings?.logoUrl || null,
   };
-  const companyName = (company as any).companyName || "Hujurat Construction Pty Ltd";
+  const companyName = getCompanyEmailDisplayName(company as any);
 
   const docDefinition = generateQuotationPdf({
     company: company as any,
@@ -124,7 +121,7 @@ export async function sendQuotationEmail(
     <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
       <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%); padding: 32px; text-align: center; border-radius: 12px 12px 0 0;">
         <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">${companyName}</h1>
-        <p style="margin: 8px 0 0; color: rgba(255,255,255,0.85); font-size: 14px;">Construction Quotation</p>
+        <p style="margin: 8px 0 0; color: rgba(255,255,255,0.85); font-size: 14px;">Quotation</p>
       </div>
       <div style="background: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none;">
         <div style="background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
@@ -146,7 +143,7 @@ export async function sendQuotationEmail(
   try {
     const transporter = createTransporter();
     await transporter.sendMail({
-      from: getFromAddress(),
+      from: getFromAddress(company as any),
       to: recipientEmail,
       subject,
       text: messageBody,
@@ -226,7 +223,7 @@ export async function sendInvoiceEmail(
     ...(settings || companyDefaults),
     logoUrl: logoDataUrl || settings?.logoUrl || null,
   };
-  const companyName = (company as any).companyName || "Hujurat Construction Pty Ltd";
+  const companyName = getCompanyEmailDisplayName(company as any);
 
   const docDefinition = generateInvoicePdf({
     company: company as any,
@@ -289,7 +286,7 @@ export async function sendInvoiceEmail(
   try {
     const transporter = createTransporter();
     await transporter.sendMail({
-      from: getFromAddress(),
+      from: getFromAddress(company as any),
       to: recipientEmail,
       subject,
       text: messageBody,

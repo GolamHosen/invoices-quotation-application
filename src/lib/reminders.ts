@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { connectDb } from "@/db";
 import { Client, Invoice, Company, EmailLog } from "@/db/schema";
 import { formatDate, formatCurrency, generateId } from "@/lib/utils";
+import { getCompanyEmailDisplayName, getFromAddress } from "@/lib/email-sender";
 
 function createTransporter() {
   const host = process.env.SMTP_HOST;
@@ -21,10 +22,6 @@ function createTransporter() {
     secure,
     auth: { user, pass },
   });
-}
-
-function getFromAddress(): string {
-  return process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@example.com";
 }
 
 export async function processPaymentReminders(options?: {
@@ -95,7 +92,7 @@ export async function processPaymentReminders(options?: {
     }, 0);
 
     const company = await Company.findById(client.companyId).lean();
-    const companyName = company?.companyName || "Hujurat Construction Pty Ltd";
+    const companyName = getCompanyEmailDisplayName(company);
     const intervalDays: number = Number(client.reminderIntervalDays) || 7;
 
     const subject = `Payment Reminder: Unpaid Invoices for ${client.name}`;
@@ -162,7 +159,7 @@ export async function processPaymentReminders(options?: {
     try {
       const transporter = createTransporter();
       await transporter.sendMail({
-        from: getFromAddress(),
+        from: getFromAddress(company),
         to: client.email,
         subject,
         text: messageText,

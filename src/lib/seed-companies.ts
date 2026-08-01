@@ -10,6 +10,10 @@ export async function ensureCompanies(): Promise<{ constructionId: string; engin
   for (const def of DEFAULT_COMPANIES) {
     const existing = await Company.findOne({ slug: def.slug }).lean();
     if (existing) {
+      // Correct the legacy names without overwriting any other settings the user has changed.
+      if (existing.companyName === "Hujurat Construction PTY Ltd" || existing.companyName === "Hujurat Engineering Consultant") {
+        await Company.findByIdAndUpdate(existing._id, { companyName: def.companyName });
+      }
       ids[def.slug] = existing._id;
     } else {
       const id = generateId();

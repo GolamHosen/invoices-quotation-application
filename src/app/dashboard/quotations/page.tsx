@@ -4,23 +4,27 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency, formatDate, QUOTATION_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
+import { getCompanyEmailDisplayName } from "@/lib/email-sender";
 import { useQuotations, useQuotationMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
-function SendEmailModal({ type, id, number, clientEmail, clientName, onClose, onSent }: {
+function SendEmailModal({ type, id, number, companyId, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
   id: string;
   number: string;
+  companyId?: string;
   clientEmail?: string;
   clientName?: string;
   onClose: () => void;
   onSent: () => void;
 }) {
+  const { companies } = useCompany();
+  const companyName = getCompanyEmailDisplayName(companies.find(company => company.id === companyId));
   const [to, setTo] = useState(clientEmail || "");
-  const [subject, setSubject] = useState(`${type === "quotation" ? "Quotation" : "Invoice"} ${number} from Hujurat Construction`);
+  const [subject, setSubject] = useState(`${type === "quotation" ? "Quotation" : "Invoice"} ${number} from ${companyName}`);
   const [message, setMessage] = useState(
-    `Dear ${clientName || "Valued Customer"},\n\nPlease find attached the ${type} ${number} for your review.\n\nIf you have any questions or require clarification, please don't hesitate to contact us.\n\nKind regards,\nHujurat Construction Pty Ltd`
+    `Dear ${clientName || "Valued Customer"},\n\nPlease find attached the ${type} ${number} for your review.\n\nIf you have any questions or require clarification, please don't hesitate to contact us.\n\nKind regards,\n${companyName}`
   );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -235,7 +239,7 @@ function QuotationsContent() {
                     <td className="px-6 py-4 text-sm text-gray-500">{formatDate(q.createdAt)}</td>
                     <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                       <a href={`/api/quotations/${q.id}/pdf`} target="_blank" className="text-blue-600 hover:text-blue-800 text-sm mr-2">PDF</a>
-                      <button onClick={() => setEmailModal({ id: q.id, number: q.quotationNumber, clientEmail: q.clientEmail, clientName: q.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
+                      <button onClick={() => setEmailModal({ id: q.id, number: q.quotationNumber, companyId: q.companyId, clientEmail: q.clientEmail, clientName: q.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(q)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
                       {q.status === "approved" && <button onClick={() => setConvertConfirmId(q.id)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">→ Invoice</button>}
                       <a href={`/dashboard/quotations/${q.id}/edit`} className="text-amber-600 hover:text-amber-800 text-sm mr-2">Edit</a>
@@ -262,7 +266,7 @@ function QuotationsContent() {
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
               <div><h2 className="text-lg font-semibold">{viewQuotation.quotationNumber}</h2><p className="text-sm text-gray-500">{viewQuotation.clientName} — {viewQuotation.projectName}</p></div>
               <div className="flex gap-2">
-                <button onClick={() => { setViewQuotation(null); setEmailModal({ id: viewQuotation.id, number: viewQuotation.quotationNumber, clientEmail: viewQuotation.clientEmail, clientName: viewQuotation.clientName }); }} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition flex items-center gap-1.5">
+                <button onClick={() => { setViewQuotation(null); setEmailModal({ id: viewQuotation.id, number: viewQuotation.quotationNumber, companyId: viewQuotation.companyId, clientEmail: viewQuotation.clientEmail, clientName: viewQuotation.clientName }); }} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition flex items-center gap-1.5">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                   Send to Client
                 </button>
@@ -357,6 +361,7 @@ function QuotationsContent() {
           type="quotation"
           id={emailModal.id}
           number={emailModal.number}
+          companyId={emailModal.companyId}
           clientEmail={emailModal.clientEmail}
           clientName={emailModal.clientName}
           onClose={() => setEmailModal(null)}

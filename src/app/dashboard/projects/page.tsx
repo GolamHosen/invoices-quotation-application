@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PROJECT_TYPES, PROJECT_STATUSES } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
+import { useClients, useProjects } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ToastContainer from "@/components/Toast";
@@ -12,41 +13,33 @@ const PAGE_SIZE = 10;
 export default function ProjectsPage() {
   const { activeCompanyId } = useCompany();
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  return <ProjectsContent key={activeCompanyId} activeCompanyId={activeCompanyId} />;
+}
+
+function ProjectsContent({ activeCompanyId }: { activeCompanyId: string }) {
   const [showModal, setShowModal] = useState(false);
   const [editProject, setEditProject] = useState<any>(null);
   const [form, setForm] = useState({ name: "", address: "", type: "granny_flat" as string, status: "pending" as string, clientId: "" });
   const [page, setPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { toasts, dismiss, withToast } = useToast();
 
-  const load = async (pageNum: number = page) => {
-    setLoading(true);
-    try {
-      const [pr, cl] = await Promise.all([
-        fetch(`/api/projects?companyId=${encodeURIComponent(activeCompanyId)}&page=${pageNum}&limit=${PAGE_SIZE}`).then((r) => r.json()),
-        fetch(`/api/clients?companyId=${encodeURIComponent(activeCompanyId)}&limit=1000`).then((r) => r.json()),
-      ]);
-      setProjects(pr.data || pr);
-      setTotalItems(pr.total || 0);
-      setTotalPages(pr.totalPages || 0);
-      setClients(cl.data || cl);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: projectsResponse, isLoading: projectsLoading, refetch: refetchProjects } = useProjects({
+    page,
+    limit: PAGE_SIZE,
+    companyId: activeCompanyId,
+  });
+  const { data: clientsResponse, isLoading: clientsLoading } = useClients({
+    page: 1,
+    limit: 1000,
+    companyId: activeCompanyId,
+  });
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeCompanyId]);
-
-  useEffect(() => {
-    load(page);
-  }, [activeCompanyId, page]);
+  const projects = projectsResponse?.data || [];
+  const clients = clientsResponse?.data || [];
+  const totalItems = projectsResponse?.total || 0;
+  const totalPages = projectsResponse?.totalPages || 0;
+  const loading = projectsLoading || clientsLoading;
 
   const openCreate = () => {
     setEditProject(null);
@@ -85,7 +78,7 @@ export default function ProjectsPage() {
           });
           if (!r.ok) throw new Error(`Failed: ${r.status}`);
         }
-        load(page);
+        await refetchProjects();
       },
     });
   };
@@ -105,7 +98,7 @@ export default function ProjectsPage() {
         if (projects.length === 1 && page > 1) {
           setPage(page - 1);
         } else {
-          load(page);
+          await refetchProjects();
         }
       },
     });
