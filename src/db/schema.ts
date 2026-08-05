@@ -157,14 +157,30 @@ export interface ITemplateSectionOption {
   updatedAt: Date;
 }
 
+export interface IAuditChange {
+  field: string;
+  label: string;
+  oldValue: string;
+  newValue: string;
+}
+
 export interface IAuditLog {
   _id: string;
+  companyId?: string;
   userId?: string;
+  userName?: string;
+  userEmail?: string;
   action: string;
   entity: string;
   entityId?: string;
+  documentType?: "quotation" | "invoice";
+  documentId?: string;
+  documentNumber?: string;
+  changes?: IAuditChange[];
+  summary?: string;
   details?: Record<string, unknown>;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface IEmailLog {
@@ -450,15 +466,32 @@ const TemplateSectionOptionSchema = new Schema<ITemplateSectionOption>({
 }, { timestamps: true, _id: false });
 TemplateSectionOptionSchema.index({ companyId: 1, sortOrder: 1 });
 
+const AuditChangeSchema = new Schema<IAuditChange>({
+  field: { type: String, required: true },
+  label: { type: String, required: true },
+  oldValue: { type: String, default: "" },
+  newValue: { type: String, default: "" },
+}, { _id: false });
+
 const AuditLogSchema = new Schema<IAuditLog>({
   _id: { type: String, required: true },
+  companyId: { type: String, index: true },
   userId: { type: String },
+  userName: { type: String, maxlength: 255 },
+  userEmail: { type: String, maxlength: 255 },
   action: { type: String, required: true, maxlength: 100 },
   entity: { type: String, required: true, maxlength: 100 },
   entityId: { type: String },
+  documentType: { type: String, enum: ["quotation", "invoice"] },
+  documentId: { type: String, index: true },
+  documentNumber: { type: String, maxlength: 50 },
+  changes: { type: [AuditChangeSchema], default: [] },
+  summary: { type: String },
   details: { type: Schema.Types.Mixed },
 }, { timestamps: true, _id: false });
 AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.index({ documentType: 1, documentId: 1, createdAt: -1 });
+AuditLogSchema.index({ companyId: 1, createdAt: -1 });
 
 const EmailLogSchema = new Schema<IEmailLog>({
   _id: { type: String, required: true },

@@ -7,6 +7,8 @@ import { getCompanyEmailDisplayName } from "@/lib/email-sender";
 import { useInvoices, useInvoiceMutations } from "@/lib/api-hooks";
 import Pagination from "@/components/Pagination";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ActivityLog from "@/components/ActivityLog";
+import ActivityLogModal from "@/components/ActivityLogModal";
 
 function SendEmailModal({ type, id, number, companyId, clientEmail, clientName, onClose, onSent }: {
   type: "quotation" | "invoice";
@@ -297,6 +299,7 @@ function InvoicesContent() {
   };
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [activityLogModal, setActivityLogModal] = useState<{ id: string; number: string } | null>(null);
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
@@ -408,6 +411,7 @@ function InvoicesContent() {
                       <button onClick={() => setEmailModal({ id: inv.id, number: inv.invoiceNumber, companyId: inv.companyId, clientEmail: inv.clientEmail, clientName: inv.clientName })} className="text-purple-600 hover:text-purple-800 text-sm mr-2" title="Send via email">📧 Email</button>
                       <button onClick={() => handleDuplicate(inv)} className="text-gray-600 hover:text-gray-800 text-sm mr-2">Duplicate</button>
                       {inv.status !== "paid" && <button onClick={() => setPaymentModalInvoice(inv)} className="text-green-600 hover:text-green-800 text-sm mr-2 font-medium">Pay</button>}
+                      <button onClick={() => setActivityLogModal({ id: inv.id, number: inv.invoiceNumber })} className="text-indigo-600 hover:text-indigo-800 text-sm mr-2 font-medium" title="View edit history">📋 History</button>
                       <a href={`/dashboard/invoices/${inv.id}/edit`} className="text-amber-600 hover:text-amber-800 text-sm mr-2">Edit</a>
                       <button onClick={() => setDeleteConfirmId(inv.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
                     </td>
@@ -600,6 +604,9 @@ function InvoicesContent() {
                   );
                 })()}
               </div>
+
+              {/* Activity Log / Edit History */}
+              <ActivityLog documentType="invoice" documentId={viewInvoice.id} />
             </div>
           </div>
         </div>
@@ -633,6 +640,14 @@ function InvoicesContent() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+      {activityLogModal && (
+        <ActivityLogModal
+          documentType="invoice"
+          documentId={activityLogModal.id}
+          documentNumber={activityLogModal.number}
+          onClose={() => setActivityLogModal(null)}
+        />
+      )}
     </div>
   );
 }

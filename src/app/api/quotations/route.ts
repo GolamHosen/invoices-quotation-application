@@ -3,6 +3,7 @@ import { connectDb } from "@/db";
 import { Quotation, Client, Project, Company } from "@/db/schema";
 import { generateId, generateQuotationNumber } from "@/lib/utils";
 import { buildCompanyFilter } from "@/lib/companies";
+import { logDocumentCreation } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -83,6 +84,15 @@ export async function POST(req: NextRequest) {
       termsAndConditions: body.termsAndConditions, notes: body.notes, createdBy: body.createdBy,
     });
     const result = await Quotation.findById(id).lean();
+
+    // Log document creation
+    await logDocumentCreation({
+      documentType: "quotation",
+      documentId: id,
+      documentNumber: quotationNumber,
+      companyId: body.companyId,
+    });
+
     return NextResponse.json({ ...result, id: (result as any)._id }, { status: 201 });
   } catch (error) {
     console.error("Create quotation error:", error);

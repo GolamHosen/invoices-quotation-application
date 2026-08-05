@@ -3,6 +3,7 @@ import { connectDb } from "@/db";
 import { Invoice, Client, Project, Company, Quotation } from "@/db/schema";
 import { generateId, generateInvoiceNumber } from "@/lib/utils";
 import { buildCompanyFilter } from "@/lib/companies";
+import { logDocumentCreation } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -103,6 +104,15 @@ export async function POST(req: NextRequest) {
       paymentTerms: body.paymentTerms, notes: body.notes, createdBy: body.createdBy,
     });
     const result = await Invoice.findById(id).lean();
+
+    // Log document creation
+    await logDocumentCreation({
+      documentType: "invoice",
+      documentId: id,
+      documentNumber: invoiceNumber,
+      companyId: body.companyId,
+    });
+
     return NextResponse.json({ ...result, id: (result as any)._id }, { status: 201 });
   } catch (error) {
     console.error("Create invoice error:", error);
