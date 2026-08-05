@@ -48,3 +48,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/audit-logs?id=<auditLogId>
+ * Delete a single audit log entry.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDb();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "id is required" },
+        { status: 400 }
+      );
+    }
+
+    const result = await AuditLog.findByIdAndDelete(id);
+    if (!result) {
+      return NextResponse.json(
+        { error: "Audit log entry not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Delete audit log error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

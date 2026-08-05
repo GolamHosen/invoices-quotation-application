@@ -59,6 +59,8 @@ export default function ActivityLog({ documentType, documentId }: ActivityLogPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +93,20 @@ export default function ActivityLog({ documentType, documentId }: ActivityLogPro
       else next.add(id);
       return next;
     });
+  };
+
+  const handleDeleteLog = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/audit-logs?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      setLogs((prev) => prev.filter((l) => l._id !== id));
+    } catch {
+      // silently fail
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   if (loading) {
@@ -194,9 +210,39 @@ export default function ActivityLog({ documentType, documentId }: ActivityLogPro
                           <span className="text-sm text-gray-700 font-medium">{log.summary}</span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {formatDateTime(log.createdAt)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {formatDateTime(log.createdAt)}
+                        </span>
+                        {/* Delete button */}
+                        {confirmDeleteId === log._id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteLog(log._id)}
+                              disabled={deletingId === log._id}
+                              className="text-[10px] px-1.5 py-0.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium"
+                            >
+                              {deletingId === log._id ? "..." : "Yes"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 font-medium"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(log._id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded hover:bg-red-50"
+                            title="Delete this log entry"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* User info */}
