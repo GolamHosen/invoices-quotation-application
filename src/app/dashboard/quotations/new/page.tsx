@@ -9,7 +9,6 @@ export default function NewQuotationPage() {
   const { activeCompanyId } = useCompany();
   const [step, setStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveType, setSaveType] = useState<"draft" | "sent" | null>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -163,9 +162,8 @@ export default function NewQuotationPage() {
   const gstAmount = subtotal * (gstRate / 100);
   const totalAmount = subtotal + gstAmount;
 
-  const handleSubmit = async (status: "draft" | "sent") => {
+  const handleSubmit = async (status: string = "draft") => {
     setIsSaving(true);
-    setSaveType(status);
     try {
       const project = projects.find((p: any) => p.id === form.projectId);
       const createResp = await fetch("/api/quotations", {
@@ -195,7 +193,6 @@ export default function NewQuotationPage() {
       console.error("Failed to save quotation:", error);
     } finally {
       setIsSaving(false);
-      setSaveType(null);
     }
   };
 
@@ -546,23 +543,12 @@ export default function NewQuotationPage() {
               <button
                 onClick={() => handleSubmit("draft")}
                 disabled={isSaving}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                className="px-6 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#152b48] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition font-medium"
               >
-                {isSaving && saveType === "draft" ? (
-                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div> Saving...</>
+                {isSaving ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Saving Quotation...</>
                 ) : (
-                  <>Save as Draft</>
-                )}
-              </button>
-              <button
-                onClick={() => handleSubmit("sent")}
-                disabled={isSaving}
-                className="px-6 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#152b48] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-              >
-                {isSaving && saveType === "sent" ? (
-                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Saving...</>
-                ) : (
-                  <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save & Mark Sent</>
+                  <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save Quotation</>
                 )}
               </button>
             </div>
