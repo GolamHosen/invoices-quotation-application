@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDb } from "@/db";
-import { Project } from "@/db/schema";
+import { getProjectById, updateProject, deleteProject } from "@/lib/turso-store";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDb();
     const { id } = await params;
-    const result = await Project.findById(id).lean();
+    const result = await getProjectById(id);
     if (!result) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     return NextResponse.json(result);
   } catch (error) {
@@ -17,11 +15,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDb();
     const { id } = await params;
     const body = await req.json();
-    await Project.findByIdAndUpdate(id, { ...body, updatedAt: new Date() });
-    const result = await Project.findById(id).lean();
+    const result = await updateProject(id, body);
+    if (!result) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     return NextResponse.json(result);
   } catch (error) {
     console.error("Update project error:", error);
@@ -31,9 +28,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDb();
     const { id } = await params;
-    await Project.findByIdAndDelete(id);
+    await deleteProject(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete project error:", error);

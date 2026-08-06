@@ -1,93 +1,117 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
-import { Quotation, Invoice, Client, Company } from "@/db/schema";
-import { ALL_COMPANIES, buildCompanyFilter } from "@/lib/companies";
+import { Company } from "@/db/schema";
+import { getQuotations, getInvoices, getClients, getClientById } from "@/lib/turso-store";
+import { ALL_COMPANIES } from "@/lib/companies";
 
 export async function GET(req: NextRequest) {
   try {
     await connectDb();
-    const companyId = req.nextUrl.searchParams.get("companyId");
-    const filter = buildCompanyFilter(companyId);
+    const rawCompanyId = req.nextUrl.searchParams.get("companyId");
+    const companyId = rawCompanyId && rawCompanyId !== ALL_COMPANIES ? rawCompanyId : undefined;
 
-    const [
-      totalQuotations,
-      totalInvoices,
-      pendingQuotations,
-      approvedQuotations,
-      paidInvoices,
-      unpaidInvoices,
-      revenueResult,
-      outstandingResult,
-      recentClients,
-      recentQuotations,
-      recentInvoices,
-    ] = await Promise.all([
-      Quotation.countDocuments(filter),
-      Invoice.countDocuments(filter),
-      Quotation.countDocuments({ ...filter, status: "draft" }),
-      Quotation.countDocuments({ ...filter, status: "approved" }),
-      Invoice.countDocuments({ ...filter, status: "paid" }),
-      Invoice.countDocuments({ ...filter, status: { $ne: "paid" } }),
-      Invoice.aggregate([
-        { $match: { ...filter, status: "paid" } },
-        { $group: { _id: null, total: { $sum: { $toDouble: "$totalAmount" } } } },
-      ]),
-      Invoice.aggregate([
-        { $match: { ...filter, status: { $ne: "paid" } } },
-        { $group: { _id: null, total: { $sum: { $toDouble: { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] } } } } },
-      ]),
-      Client.find(filter).sort({ createdAt: -1 }).limit(5).lean(),
-      Quotation.aggregate([
-        ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
-        { $sort: { createdAt: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
-        { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-        { $project: { _id: 1, companyId: 1, quotationNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
-      ]),
-      Invoice.aggregate([
-        ...(Object.keys(filter).length > 0 ? [{ $match: filter }] : []),
-        { $sort: { createdAt: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: "clients", localField: "clientId", foreignField: "_id", as: "client" } },
-        { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-        { $project: { _id: 1, companyId: 1, invoiceNumber: 1, status: 1, totalAmount: 1, createdAt: 1, clientName: "$client.name" } },
-      ]),
+    const [allQuotationsRes, allInvoicesRes, allClients] = await Promise.all([
+      getQuotations({ companyId, limit: 2000 }),
+      getInvoices({ companyId, limit: 2000 }),
+      getClients(companyId),
     ]);
 
-    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total.toString() : "0";
-    const outstandingAmount = outstandingResult.length > 0 ? outstandingResult[0].total.toString() : "0";
-    
+    const quotations = allQuotationsRes.data;
+    const invoices = allInvoicesRes.data;
+
+    const totalQuotations = quotations.length;
+    const totalInvoices = invoices.length;
+    const pendingQuotations = quotations.filter((q: any) => q.status === "draft").length;
+    const approvedQuotations = quotations.filter((q: any) => q.status === "approved").length;
+    const paidInvoices = invoices.filter((i: any) => i.status === "paid").length;
+    const unpaidInvoices = invoices.filter((i: any) => i.status !== "paid").length;
+
+    let totalRevenueNum = 0;
+    let outstandingAmountNum = 0;
+
+    invoices.forEach((i: any) => {
+      const tot = parseFloat(i.totalAmount || "0");
+      const paid = parseFloat(i.paidAmount || "0");
+      if (i.status === "paid") {
+        totalRevenueNum += tot;
+      } else {
+        outstandingAmountNum += Math.max(0, tot - paid);
+      }
+    });
+
+    const totalRevenue = totalRevenueNum.toString();
+    const outstandingAmount = outstandingAmountNum.toString();
+
+    // Recent entities
+    const recentClients = allClients.slice(0, 5).map((c: any) => ({ ...c, _id: c.id }));
+
+    // Enrich recent quotations with client names
+    const clientMap = new Map();
+    const clientIds = [
+      ...new Set([
+        ...quotations.slice(0, 5).map((q: any) => q.clientId),
+        ...invoices.slice(0, 5).map((i: any) => i.clientId),
+      ]),
+    ];
+
+    await Promise.all(
+      clientIds.map(async (cId) => {
+        if (cId) {
+          const client = await getClientById(cId);
+          if (client) clientMap.set(cId, client.name);
+        }
+      })
+    );
+
+    const recentQuotations = quotations.slice(0, 5).map((q: any) => ({
+      _id: q.id,
+      id: q.id,
+      companyId: q.companyId,
+      quotationNumber: q.quotationNumber,
+      status: q.status,
+      totalAmount: q.totalAmount,
+      createdAt: q.createdAt,
+      clientName: clientMap.get(q.clientId) || null,
+    }));
+
+    const recentInvoices = invoices.slice(0, 5).map((i: any) => ({
+      _id: i.id,
+      id: i.id,
+      companyId: i.companyId,
+      invoiceNumber: i.invoiceNumber,
+      status: i.status,
+      totalAmount: i.totalAmount,
+      createdAt: i.createdAt,
+      clientName: clientMap.get(i.clientId) || null,
+    }));
+
     let byCompany: any[] = [];
-    if (!companyId || companyId === ALL_COMPANIES) {
-      const [companies, quotationCounts, invoiceStats] = await Promise.all([
-        Company.find().lean(),
-        Quotation.aggregate([{ $group: { _id: "$companyId", total: { $sum: 1 } } }]),
-        Invoice.aggregate([
-          {
-            $group: {
-              _id: "$companyId",
-              totalInvoices: { $sum: 1 },
-              revenue: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, { $toDouble: "$totalAmount" }, 0] } },
-              outstanding: { $sum: { $cond: [{ $ne: ["$status", "paid"] }, { $subtract: [{ $toDouble: "$totalAmount" }, { $toDouble: "$paidAmount" }] }, 0] } },
-            },
-          },
-        ]),
-      ]);
+    if (!rawCompanyId || rawCompanyId === ALL_COMPANIES) {
+      const companies = await Company.find().lean();
+      const allQRes = await getQuotations({ limit: 5000 });
+      const allIRes = await getInvoices({ limit: 5000 });
 
-      const qMap = new Map(quotationCounts.map(q => [q._id, q.total]));
-      const iMap = new Map(invoiceStats.map(i => [i._id, i]));
-
-      byCompany = companies.map(c => {
+      byCompany = companies.map((c: any) => {
         const cId = c._id.toString();
-        const iStat = iMap.get(cId) || { totalInvoices: 0, revenue: 0, outstanding: 0 };
+        const cQuotations = allQRes.data.filter((q: any) => q.companyId === cId);
+        const cInvoices = allIRes.data.filter((i: any) => i.companyId === cId);
+
+        let rev = 0;
+        let out = 0;
+        cInvoices.forEach((inv: any) => {
+          const tot = parseFloat(inv.totalAmount || "0");
+          const paid = parseFloat(inv.paidAmount || "0");
+          if (inv.status === "paid") rev += tot;
+          else out += Math.max(0, tot - paid);
+        });
+
         return {
           companyId: cId,
           shortName: c.shortName,
-          totalQuotations: qMap.get(cId) || 0,
-          totalInvoices: iStat.totalInvoices,
-          revenue: iStat.revenue.toString(),
-          outstanding: iStat.outstanding.toString(),
+          totalQuotations: cQuotations.length,
+          totalInvoices: cInvoices.length,
+          revenue: rev.toString(),
+          outstanding: out.toString(),
         };
       });
     }
@@ -103,9 +127,9 @@ export async function GET(req: NextRequest) {
         totalRevenue,
         outstandingAmount,
       },
-      recentClients: recentClients.map(c => ({...c, _id: c._id.toString()})),
-      recentQuotations: recentQuotations.map(q => ({...q, _id: q._id.toString()})),
-      recentInvoices: recentInvoices.map(i => ({...i, _id: i._id.toString()})),
+      recentClients,
+      recentQuotations,
+      recentInvoices,
       byCompany,
     };
 

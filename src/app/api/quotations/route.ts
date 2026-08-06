@@ -1,47 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
-import { Quotation, Client, Project, Company } from "@/db/schema";
+import { Company } from "@/db/schema";
+import { getQuotations, createQuotation, getClientById, getProjectById } from "@/lib/turso-store";
 import { generateId, generateQuotationNumber } from "@/lib/utils";
-import { buildCompanyFilter } from "@/lib/companies";
 import { logDocumentCreation } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDb();
-    const status = req.nextUrl.searchParams.get("status");
-    const clientId = req.nextUrl.searchParams.get("clientId");
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const status = req.nextUrl.searchParams.get("status") || undefined;
+    const clientId = req.nextUrl.searchParams.get("clientId") || undefined;
+    const companyId = req.nextUrl.searchParams.get("companyId") || undefined;
     const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
-    const skip = (page - 1) * limit;
 
-    const filter = buildCompanyFilter(companyId);
-    if (status) filter.status = status;
-    if (clientId) filter.clientId = clientId;
-
-    const [quotations, total] = await Promise.all([
-      Quotation.find(filter).select("-sections").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      Quotation.countDocuments(filter),
-    ]);
+    const { data: quotations, total, totalPages } = await getQuotations({
+      companyId,
+      clientId,
+      status,
+      page,
+      limit,
+    });
 
     // Attach client and project names
-    const clientIds = [...new Set(quotations.map(q => q.clientId))];
-    const projectIds = [...new Set(quotations.map(q => q.projectId))];
-    const [clients, projects] = await Promise.all([
-      clientIds.length > 0
-        ? Client.find({ _id: { $in: clientIds } }).select("_id name email").lean()
-        : Promise.resolve([]),
-      projectIds.length > 0
-        ? Project.find({ _id: { $in: projectIds } }).select("_id name").lean()
-        : Promise.resolve([]),
-    ]);
-    const clientMap = new Map(clients.map(c => [c._id, c.name]));
-    const clientEmailMap = new Map(clients.map(c => [c._id, (c as any).email || null]));
-    const projectMap = new Map(projects.map(p => [p._id, p.name]));
+    const clientMap = new Map();
+    const clientEmailMap = new Map();
+    const projectMap = new Map();
 
-    const result = quotations.map(q => ({
+    const clientIds = [...new Set(quotations.map((q: any) => q.clientId))];
+    const projectIds = [...new Set(quotations.map((q: any) => q.projectId))];
+
+    await Promise.all([
+      ...clientIds.map(async (cId) => {
+        if (cId) {
+          const client = await getClientById(cId);
+          if (client) {
+            clientMap.set(cId, client.name);
+            clientEmailMap.set(cId, client.email || null);
+          }
+        }
+      }),
+      ...projectIds.map(async (pId) => {
+        if (pId) {
+          const project = await getProjectById(pId);
+          if (project) projectMap.set(pId, project.name);
+        }
+      }),
+    ]);
+
+    const result = quotations.map((q: any) => ({
       ...q,
-      id: q._id,
       clientName: clientMap.get(q.clientId) || null,
       clientEmail: clientEmailMap.get(q.clientId) || null,
       projectName: projectMap.get(q.projectId) || null,
@@ -51,7 +58,7 @@ export async function GET(req: NextRequest) {
       data: result,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
     });
   } catch (error) {
     console.error("Get quotations error:", error);
@@ -61,29 +68,38 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDb();
     const body = await req.json();
     if (!body.companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    
+
+    await connectDb();
     const company = await Company.findById(body.companyId).lean();
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
-    
+
     const id = generateId();
     const quotationNumber = body.quotationNumber || generateQuotationNumber(company.quotationPrefix);
-    await Quotation.create({
-      _id: id, companyId: body.companyId, quotationNumber, clientId: body.clientId, projectId: body.projectId,
-      templateId: body.templateId, status: body.status || "draft",
+
+    const result = await createQuotation({
+      id,
+      companyId: body.companyId,
+      quotationNumber,
+      clientId: body.clientId,
+      projectId: body.projectId,
+      templateId: body.templateId,
+      status: body.status || "draft",
       issueDate: body.issueDate ? new Date(body.issueDate) : new Date(),
       expiryDate: body.expiryDate ? new Date(body.expiryDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      sections: body.sections, subtotal: body.subtotal?.toString() || "0",
-      gstAmount: body.gstAmount?.toString() || "0", totalAmount: body.totalAmount?.toString() || "0",
-      termsAndConditions: body.termsAndConditions, notes: body.notes, createdBy: body.createdBy,
+      sections: body.sections || [],
+      subtotal: body.subtotal?.toString() || "0",
+      gstAmount: body.gstAmount?.toString() || "0",
+      totalAmount: body.totalAmount?.toString() || "0",
+      termsAndConditions: body.termsAndConditions,
+      notes: body.notes,
+      createdBy: body.createdBy,
     });
-    const result = await Quotation.findById(id).lean();
 
     // Log document creation
     await logDocumentCreation({
@@ -93,7 +109,7 @@ export async function POST(req: NextRequest) {
       companyId: body.companyId,
     });
 
-    return NextResponse.json({ ...result, id: (result as any)._id }, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error("Create quotation error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

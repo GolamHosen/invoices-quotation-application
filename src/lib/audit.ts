@@ -1,4 +1,5 @@
 import { AuditLog, IAuditChange, IAuditLog } from "@/db/schema";
+import { createAuditLog } from "@/lib/turso-store";
 import { generateId } from "@/lib/utils";
 import { getSession } from "@/lib/auth";
 
@@ -524,7 +525,19 @@ export async function logDocumentEdit({
     const summary = generateSummary(changes);
     const user = await getCurrentUser();
 
-    const auditEntry = new AuditLog({
+    await createAuditLog({
+      companyId,
+      userId: user?.id,
+      userName: user?.name,
+      userRole: user?.role,
+      action: "edit",
+      entityType: documentType,
+      entityId: documentId,
+      entityNumber: documentNumber,
+      details: { changes, summary },
+    });
+
+    return {
       _id: generateId(),
       companyId,
       userId: user?.id,
@@ -538,13 +551,10 @@ export async function logDocumentEdit({
       documentNumber,
       changes,
       summary,
-    });
-
-    await auditEntry.save();
-    return auditEntry.toObject() as IAuditLog;
+      createdAt: new Date(),
+    } as any;
   } catch (error) {
     console.error("Failed to log audit entry:", error);
-    // Don't throw - audit logging should not break the main operation
     return null;
   }
 }
@@ -579,8 +589,21 @@ export async function logStatusChange({
         newValue: newStatus.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       },
     ];
+    const summary = `Status changed from "${changes[0].oldValue}" to "${changes[0].newValue}"`;
 
-    const auditEntry = new AuditLog({
+    await createAuditLog({
+      companyId,
+      userId: user?.id,
+      userName: user?.name,
+      userRole: user?.role,
+      action: "status_change",
+      entityType: documentType,
+      entityId: documentId,
+      entityNumber: documentNumber,
+      details: { changes, summary },
+    });
+
+    return {
       _id: generateId(),
       companyId,
       userId: user?.id,
@@ -593,11 +616,9 @@ export async function logStatusChange({
       documentId,
       documentNumber,
       changes,
-      summary: `Status changed from "${changes[0].oldValue}" to "${changes[0].newValue}"`,
-    });
-
-    await auditEntry.save();
-    return auditEntry.toObject() as IAuditLog;
+      summary,
+      createdAt: new Date(),
+    } as any;
   } catch (error) {
     console.error("Failed to log status change:", error);
     return null;
@@ -630,7 +651,29 @@ export async function logPaymentAdded({
       minimumFractionDigits: 2,
     }).format(amount);
 
-    const auditEntry = new AuditLog({
+    const changes = [
+      {
+        field: "payment",
+        label: "Payment Recorded",
+        oldValue: "",
+        newValue: `${formattedAmount} on ${new Date(date).toLocaleDateString("en-AU")}${note ? ` (${note})` : ""}`,
+      },
+    ];
+    const summary = `Payment of ${formattedAmount} recorded`;
+
+    await createAuditLog({
+      companyId,
+      userId: user?.id,
+      userName: user?.name,
+      userRole: user?.role,
+      action: "payment_added",
+      entityType: "invoice",
+      entityId: documentId,
+      entityNumber: documentNumber,
+      details: { changes, summary },
+    });
+
+    return {
       _id: generateId(),
       companyId,
       userId: user?.id,
@@ -642,19 +685,10 @@ export async function logPaymentAdded({
       documentType: "invoice",
       documentId,
       documentNumber,
-      changes: [
-        {
-          field: "payment",
-          label: "Payment Recorded",
-          oldValue: "",
-          newValue: `${formattedAmount} on ${new Date(date).toLocaleDateString("en-AU")}${note ? ` (${note})` : ""}`,
-        },
-      ],
-      summary: `Payment of ${formattedAmount} recorded`,
-    });
-
-    await auditEntry.save();
-    return auditEntry.toObject() as IAuditLog;
+      changes,
+      summary,
+      createdAt: new Date(),
+    } as any;
   } catch (error) {
     console.error("Failed to log payment:", error);
     return null;
@@ -677,8 +711,21 @@ export async function logDocumentCreation({
 }): Promise<IAuditLog | null> {
   try {
     const user = await getCurrentUser();
+    const summary = `${documentType === "quotation" ? "Quotation" : "Invoice"} ${documentNumber} created`;
 
-    const auditEntry = new AuditLog({
+    await createAuditLog({
+      companyId,
+      userId: user?.id,
+      userName: user?.name,
+      userRole: user?.role,
+      action: "create",
+      entityType: documentType,
+      entityId: documentId,
+      entityNumber: documentNumber,
+      details: { changes: [], summary },
+    });
+
+    return {
       _id: generateId(),
       companyId,
       userId: user?.id,
@@ -691,11 +738,9 @@ export async function logDocumentCreation({
       documentId,
       documentNumber,
       changes: [],
-      summary: `${documentType === "quotation" ? "Quotation" : "Invoice"} ${documentNumber} created`,
-    });
-
-    await auditEntry.save();
-    return auditEntry.toObject() as IAuditLog;
+      summary,
+      createdAt: new Date(),
+    } as any;
   } catch (error) {
     console.error("Failed to log creation:", error);
     return null;

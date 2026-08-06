@@ -1,64 +1,74 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
-import { Invoice, Client, Project, Company, Quotation } from "@/db/schema";
+import { Company } from "@/db/schema";
+import {
+  getInvoices,
+  createInvoice,
+  getClientById,
+  getProjectById,
+  getQuotationById,
+} from "@/lib/turso-store";
 import { generateId, generateInvoiceNumber } from "@/lib/utils";
-import { buildCompanyFilter } from "@/lib/companies";
 import { logDocumentCreation } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDb();
-    const status = req.nextUrl.searchParams.get("status");
-    const clientId = req.nextUrl.searchParams.get("clientId");
-    const companyId = req.nextUrl.searchParams.get("companyId");
-    const quotationId = req.nextUrl.searchParams.get("quotationId");
+    const status = req.nextUrl.searchParams.get("status") || undefined;
+    const clientId = req.nextUrl.searchParams.get("clientId") || undefined;
+    const companyId = req.nextUrl.searchParams.get("companyId") || undefined;
+    const quotationId = req.nextUrl.searchParams.get("quotationId") || undefined;
     const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
-    const skip = (page - 1) * limit;
 
-    const filter: Record<string, unknown> = buildCompanyFilter(companyId);
-    if (status) {
-      if (status === "unpaid") {
-        (filter as any).status = { $ne: "paid" };
-      } else {
-        (filter as any).status = status;
-      }
+    const { data: invoices, total, totalPages } = await getInvoices({
+      companyId,
+      clientId,
+      quotationId,
+      status: status === "unpaid" ? undefined : status,
+      page,
+      limit,
+    });
+
+    let filteredInvoices = invoices;
+    if (status === "unpaid") {
+      filteredInvoices = invoices.filter((inv: any) => inv.status !== "paid");
     }
-    if (clientId) (filter as any).clientId = clientId;
-    if (quotationId) (filter as any).quotationId = quotationId;
 
-    // Run main query + count in parallel
-    const [invoices, total] = await Promise.all([
-      Invoice.find(filter).select("-sections").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      Invoice.countDocuments(filter),
+    const clientMap = new Map();
+    const clientEmailMap = new Map();
+    const projectMap = new Map();
+    const quotationNumberMap = new Map();
+
+    const clientIds = [...new Set(filteredInvoices.map((inv: any) => inv.clientId))];
+    const projectIds = [...new Set(filteredInvoices.map((inv: any) => inv.projectId))];
+    const invoiceQuotationIds = [...new Set(filteredInvoices.map((inv: any) => inv.quotationId).filter(Boolean))];
+
+    await Promise.all([
+      ...clientIds.map(async (cId) => {
+        if (cId) {
+          const client = await getClientById(cId);
+          if (client) {
+            clientMap.set(cId, client.name);
+            clientEmailMap.set(cId, client.email || null);
+          }
+        }
+      }),
+      ...projectIds.map(async (pId) => {
+        if (pId) {
+          const project = await getProjectById(pId);
+          if (project) projectMap.set(pId, project.name);
+        }
+      }),
+      ...invoiceQuotationIds.map(async (qId) => {
+        if (qId) {
+          const quotation = await getQuotationById(qId);
+          if (quotation) quotationNumberMap.set(qId, quotation.quotationNumber);
+        }
+      }),
     ]);
 
-    // Collect unique IDs for batch lookup
-    const clientIds = [...new Set(invoices.map(inv => inv.clientId))];
-    const projectIds = [...new Set(invoices.map(inv => inv.projectId))];
-    const invoiceQuotationIds = [...new Set(invoices.map(inv => inv.quotationId).filter(Boolean))] as string[];
-
-    // Run ALL related lookups in parallel (not sequential)
-    const [clients, projects, quotationDocs] = await Promise.all([
-      clientIds.length > 0
-        ? Client.find({ _id: { $in: clientIds } }).select("_id name email").lean()
-        : Promise.resolve([]),
-      projectIds.length > 0
-        ? Project.find({ _id: { $in: projectIds } }).select("_id name").lean()
-        : Promise.resolve([]),
-      invoiceQuotationIds.length > 0
-        ? Quotation.find({ _id: { $in: invoiceQuotationIds } }).select("_id quotationNumber").lean()
-        : Promise.resolve([]),
-    ]);
-
-    const clientMap = new Map(clients.map((c: any) => [c._id, c.name]));
-    const clientEmailMap = new Map(clients.map((c: any) => [c._id, (c as any).email || null]));
-    const projectMap = new Map(projects.map((p: any) => [p._id, p.name]));
-    const quotationNumberMap = new Map(quotationDocs.map((q: any) => [q._id, q.quotationNumber]));
-
-    const result = invoices.map(inv => ({
+    const result = filteredInvoices.map((inv: any) => ({
       ...inv,
-      id: inv._id,
       clientName: clientMap.get(inv.clientId) || null,
       clientEmail: clientEmailMap.get(inv.clientId) || null,
       projectName: projectMap.get(inv.projectId) || null,
@@ -70,7 +80,7 @@ export async function GET(req: NextRequest) {
       data: result,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
     });
   } catch (error) {
     console.error("Get invoices error:", error);
@@ -80,30 +90,40 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDb();
     const body = await req.json();
     if (!body.companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    
+
+    await connectDb();
     const company = await Company.findById(body.companyId).lean();
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
-    
+
     const id = generateId();
     const invoiceNumber = body.invoiceNumber || generateInvoiceNumber(company.invoicePrefix);
-    await Invoice.create({
-      _id: id, companyId: body.companyId, invoiceNumber, quotationId: body.quotationId, clientId: body.clientId, projectId: body.projectId,
+
+    const result = await createInvoice({
+      id,
+      companyId: body.companyId,
+      invoiceNumber,
+      quotationId: body.quotationId,
+      clientId: body.clientId,
+      projectId: body.projectId,
       status: body.status || "draft",
       issueDate: body.issueDate ? new Date(body.issueDate) : new Date(),
       dueDate: body.dueDate ? new Date(body.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      sections: body.sections, subtotal: body.subtotal?.toString() || "0",
-      gstAmount: body.gstAmount?.toString() || "0", totalAmount: body.totalAmount?.toString() || "0",
+      sections: body.sections || [],
+      subtotal: body.subtotal?.toString() || "0",
+      gstAmount: body.gstAmount?.toString() || "0",
+      totalAmount: body.totalAmount?.toString() || "0",
       paidAmount: body.paidAmount?.toString() || "0",
-      paymentTerms: body.paymentTerms, notes: body.notes, createdBy: body.createdBy,
+      payments: body.payments || [],
+      paymentTerms: body.paymentTerms,
+      notes: body.notes,
+      createdBy: body.createdBy,
     });
-    const result = await Invoice.findById(id).lean();
 
     // Log document creation
     await logDocumentCreation({
@@ -113,7 +133,7 @@ export async function POST(req: NextRequest) {
       companyId: body.companyId,
     });
 
-    return NextResponse.json({ ...result, id: (result as any)._id }, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error("Create invoice error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

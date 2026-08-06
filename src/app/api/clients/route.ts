@@ -1,32 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDb } from "@/db";
-import { Client } from "@/db/schema";
+import { getClients, createClient } from "@/lib/turso-store";
 import { generateId } from "@/lib/utils";
-import { buildCompanyFilter } from "@/lib/companies";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDb();
-    const search = req.nextUrl.searchParams.get("search");
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const search = req.nextUrl.searchParams.get("search")?.toLowerCase();
+    const companyId = req.nextUrl.searchParams.get("companyId") || undefined;
     const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
-    const skip = (page - 1) * limit;
 
-    const filter = buildCompanyFilter(companyId);
+    let allClients = await getClients(companyId);
+
     if (search) {
-      const regex = new RegExp(search, "i");
-      filter.$or = [{ name: regex }, { email: regex }, { companyName: regex }];
+      allClients = allClients.filter(
+        (c: any) =>
+          c.name?.toLowerCase().includes(search) ||
+          c.email?.toLowerCase().includes(search) ||
+          c.companyName?.toLowerCase().includes(search)
+      );
     }
 
-    const [clients, total] = await Promise.all([
-      Client.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      Client.countDocuments(filter),
-    ]);
+    const total = allClients.length;
+    const skip = (page - 1) * limit;
+    const paginated = allClients.slice(skip, skip + limit);
 
-    const formattedResult = clients.map(c => ({ ...c, id: c._id }));
     return NextResponse.json({
-      data: formattedResult,
+      data: paginated,
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -39,7 +38,6 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDb();
     const body = await req.json();
     if (!body.companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
@@ -55,8 +53,8 @@ export async function POST(req: NextRequest) {
       nextReminderDueAt = due;
     }
 
-    await Client.create({
-      _id: id,
+    const result = await createClient({
+      id,
       companyId: body.companyId,
       name: body.name,
       companyName: body.companyName,
@@ -66,10 +64,10 @@ export async function POST(req: NextRequest) {
       notes: body.notes,
       autoRemindersEnabled,
       reminderIntervalDays,
-      ...(nextReminderDueAt ? { nextReminderDueAt } : {}),
+      nextReminderDueAt,
       createdBy: body.createdBy,
     });
-    const result = await Client.findById(id).lean();
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error("Create client error:", error);

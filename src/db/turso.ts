@@ -44,6 +44,89 @@ export async function initTursoSchema() {
 
   await client.batch([
     {
+      sql: `CREATE TABLE IF NOT EXISTS clients (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        company_name TEXT,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        notes TEXT,
+        auto_reminders_enabled INTEGER DEFAULT 1,
+        reminder_interval_days INTEGER DEFAULT 7,
+        last_reminder_sent_at DATETIME,
+        next_reminder_due_at DATETIME,
+        created_by TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      args: [],
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        address TEXT,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        created_by TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      args: [],
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS quotations (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        quotation_number TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        template_id TEXT,
+        status TEXT NOT NULL,
+        issue_date DATETIME NOT NULL,
+        expiry_date DATETIME NOT NULL,
+        sections_json TEXT NOT NULL DEFAULT '[]',
+        subtotal TEXT NOT NULL DEFAULT '0',
+        gst_amount TEXT NOT NULL DEFAULT '0',
+        total_amount TEXT NOT NULL DEFAULT '0',
+        terms_and_conditions TEXT,
+        notes TEXT,
+        created_by TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      args: [],
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        invoice_number TEXT NOT NULL,
+        quotation_id TEXT,
+        client_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        issue_date DATETIME NOT NULL,
+        due_date DATETIME NOT NULL,
+        sections_json TEXT NOT NULL DEFAULT '[]',
+        subtotal TEXT NOT NULL DEFAULT '0',
+        gst_amount TEXT NOT NULL DEFAULT '0',
+        total_amount TEXT NOT NULL DEFAULT '0',
+        paid_amount TEXT NOT NULL DEFAULT '0',
+        payments_json TEXT NOT NULL DEFAULT '[]',
+        payment_terms TEXT,
+        notes TEXT,
+        created_by TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      args: [],
+    },
+    {
       sql: `CREATE TABLE IF NOT EXISTS audit_logs (
         id TEXT PRIMARY KEY,
         company_id TEXT NOT NULL,
@@ -83,4 +166,3 @@ export async function initTursoSchema() {
     },
   ]);
 }
-

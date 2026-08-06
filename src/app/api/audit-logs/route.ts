@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDb } from "@/db";
-import { AuditLog } from "@/db/schema";
+import { getAuditLogs } from "@/lib/turso-store";
+import { turso } from "@/db/turso";
 
-/**
- * GET /api/audit-logs
- * Fetch audit logs for a specific document.
- *
- * Query params:
- * - documentType: "quotation" | "invoice"
- * - documentId: The document ID
- * - limit: Optional, default 50
- */
 export async function GET(req: NextRequest) {
   try {
-    await connectDb();
     const { searchParams } = new URL(req.url);
     const documentType = searchParams.get("documentType");
     const documentId = searchParams.get("documentId");
@@ -34,13 +24,29 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const logs = await AuditLog.find({
-      documentType: documentType as "quotation" | "invoice",
-      documentId,
-    })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const rawLogs = await getAuditLogs({
+      entityId: documentId,
+      entityType: documentType,
+      limit,
+    });
+
+    const logs = rawLogs.map((l: any) => ({
+      _id: l.id,
+      id: l.id,
+      companyId: l.companyId,
+      userId: l.userId,
+      userName: l.userName,
+      userRole: l.userRole,
+      action: l.action,
+      entity: l.entityType,
+      entityId: l.entityId,
+      documentType: l.entityType,
+      documentId: l.entityId,
+      documentNumber: l.entityNumber,
+      changes: l.details?.changes || [],
+      summary: l.details?.summary || "",
+      createdAt: l.createdAt,
+    }));
 
     return NextResponse.json({ data: logs });
   } catch (error) {
@@ -49,13 +55,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * DELETE /api/audit-logs?id=<auditLogId>
- * Delete a single audit log entry.
- */
 export async function DELETE(req: NextRequest) {
   try {
-    await connectDb();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -66,13 +67,10 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const result = await AuditLog.findByIdAndDelete(id);
-    if (!result) {
-      return NextResponse.json(
-        { error: "Audit log entry not found" },
-        { status: 404 }
-      );
-    }
+    await turso.execute({
+      sql: "DELETE FROM audit_logs WHERE id = ?",
+      args: [id],
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,43 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDb } from "@/db";
-import { Project, Client } from "@/db/schema";
+import { getProjects, getClientById, createProject } from "@/lib/turso-store";
 import { generateId } from "@/lib/utils";
-import { buildCompanyFilter } from "@/lib/companies";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDb();
-    const search = req.nextUrl.searchParams.get("search");
-    const clientId = req.nextUrl.searchParams.get("clientId");
-    const companyId = req.nextUrl.searchParams.get("companyId");
+    const search = req.nextUrl.searchParams.get("search")?.toLowerCase();
+    const clientId = req.nextUrl.searchParams.get("clientId") || undefined;
+    const companyId = req.nextUrl.searchParams.get("companyId") || undefined;
     const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
-    const skip = (page - 1) * limit;
 
-    const filter = buildCompanyFilter(companyId);
+    let projects = await getProjects(companyId, clientId);
+
     if (search) {
-      const regex = new RegExp(search, "i");
-      filter.$or = [{ name: regex }, { address: regex }];
-    }
-    if (clientId) {
-      filter.clientId = clientId;
+      projects = projects.filter(
+        (p: any) =>
+          p.name?.toLowerCase().includes(search) ||
+          p.address?.toLowerCase().includes(search)
+      );
     }
 
-    const [projects, total] = await Promise.all([
-      Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      Project.countDocuments(filter),
-    ]);
-    
+    const total = projects.length;
+    const skip = (page - 1) * limit;
+    const paginated = projects.slice(skip, skip + limit);
+
     // Attach client names
-    const clientIds = [...new Set(projects.map(p => p.clientId))];
-    const clients = clientIds.length > 0
-      ? await Client.find({ _id: { $in: clientIds } }).select("_id name").lean()
-      : [];
-    const clientMap = new Map(clients.map(c => [c._id, c.name]));
-    
-    const result = projects.map(p => ({
+    const clientIds = [...new Set(paginated.map((p: any) => p.clientId))];
+    const clientMap = new Map();
+    await Promise.all(
+      clientIds.map(async (cId) => {
+        if (cId) {
+          const client = await getClientById(cId);
+          if (client) clientMap.set(cId, client.name);
+        }
+      })
+    );
+
+    const result = paginated.map((p: any) => ({
       ...p,
-      id: p._id,
       clientName: clientMap.get(p.clientId) || null,
     }));
 
@@ -55,14 +55,21 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDb();
     const body = await req.json();
     if (!body.companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
     const id = generateId();
-    await Project.create({ _id: id, companyId: body.companyId, name: body.name, address: body.address, type: body.type, status: body.status || "pending", clientId: body.clientId, createdBy: body.createdBy });
-    const result = await Project.findById(id).lean();
+    const result = await createProject({
+      id,
+      companyId: body.companyId,
+      name: body.name,
+      address: body.address,
+      type: body.type,
+      status: body.status || "pending",
+      clientId: body.clientId,
+      createdBy: body.createdBy,
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error("Create project error:", error);
