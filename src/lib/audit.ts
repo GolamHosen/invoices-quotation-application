@@ -470,12 +470,16 @@ export function generateSummary(changes: IAuditChange[]): string {
 /**
  * Get the current session user info for audit logging.
  */
-async function getCurrentUser(): Promise<{ id: string; email: string; name: string; role: string } | null> {
+async function getCurrentUser() {
   try {
     const session = await getSession();
-    return session
-      ? { id: session.id, email: session.email, name: session.email, role: session.role }
-      : null;
+    if (!session) return null;
+    return {
+      id: session.id as string,
+      email: session.email as string,
+      name: (session as any).name || session.email,
+      role: (session.role as string) || "staff",
+    };
   } catch {
     return null;
   }
@@ -524,12 +528,16 @@ export async function logDocumentEdit({
 
     const summary = generateSummary(changes);
     const user = await getCurrentUser();
+    const userId = user?.id || undefined;
+    const userName = user?.name || undefined;
+    const userEmail = user?.email || undefined;
+    const userRole = user?.role || undefined;
 
     await createAuditLog({
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userRole: user?.role,
+      userId,
+      userName,
+      userRole,
       action: "edit",
       entityType: documentType,
       entityId: documentId,
@@ -540,9 +548,9 @@ export async function logDocumentEdit({
     return {
       _id: generateId(),
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userEmail: user?.email,
+      userId,
+      userName,
+      userEmail,
       action: "edit",
       entity: documentType,
       entityId: documentId,
@@ -581,6 +589,11 @@ export async function logStatusChange({
 
   try {
     const user = await getCurrentUser();
+    const userId = user?.id || undefined;
+    const userName = user?.name || undefined;
+    const userEmail = user?.email || undefined;
+    const userRole = user?.role || undefined;
+
     const changes: IAuditChange[] = [
       {
         field: "status",
@@ -593,9 +606,9 @@ export async function logStatusChange({
 
     await createAuditLog({
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userRole: user?.role,
+      userId,
+      userName,
+      userRole,
       action: "status_change",
       entityType: documentType,
       entityId: documentId,
@@ -606,9 +619,9 @@ export async function logStatusChange({
     return {
       _id: generateId(),
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userEmail: user?.email,
+      userId,
+      userName,
+      userEmail,
       action: "status_change",
       entity: documentType,
       entityId: documentId,
@@ -645,6 +658,11 @@ export async function logPaymentAdded({
 }): Promise<IAuditLog | null> {
   try {
     const user = await getCurrentUser();
+    const userId = user?.id || undefined;
+    const userName = user?.name || undefined;
+    const userEmail = user?.email || undefined;
+    const userRole = user?.role || undefined;
+
     const formattedAmount = new Intl.NumberFormat("en-AU", {
       style: "currency",
       currency: "AUD",
@@ -663,9 +681,9 @@ export async function logPaymentAdded({
 
     await createAuditLog({
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userRole: user?.role,
+      userId,
+      userName,
+      userRole,
       action: "payment_added",
       entityType: "invoice",
       entityId: documentId,
@@ -676,9 +694,9 @@ export async function logPaymentAdded({
     return {
       _id: generateId(),
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userEmail: user?.email,
+      userId,
+      userName,
+      userEmail,
       action: "payment_added",
       entity: "invoice",
       entityId: documentId,
@@ -711,13 +729,18 @@ export async function logDocumentCreation({
 }): Promise<IAuditLog | null> {
   try {
     const user = await getCurrentUser();
+    const userId = user?.id || undefined;
+    const userName = user?.name || undefined;
+    const userEmail = user?.email || undefined;
+    const userRole = user?.role || undefined;
+
     const summary = `${documentType === "quotation" ? "Quotation" : "Invoice"} ${documentNumber} created`;
 
     await createAuditLog({
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userRole: user?.role,
+      userId,
+      userName,
+      userRole,
       action: "create",
       entityType: documentType,
       entityId: documentId,
@@ -728,9 +751,9 @@ export async function logDocumentCreation({
     return {
       _id: generateId(),
       companyId,
-      userId: user?.id,
-      userName: user?.name,
-      userEmail: user?.email,
+      userId,
+      userName,
+      userEmail,
       action: "create",
       entity: documentType,
       entityId: documentId,
@@ -744,5 +767,4 @@ export async function logDocumentCreation({
   } catch (error) {
     console.error("Failed to log creation:", error);
     return null;
-  }
-}
+  }
