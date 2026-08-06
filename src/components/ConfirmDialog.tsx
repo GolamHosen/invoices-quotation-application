@@ -9,6 +9,8 @@ type ConfirmDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "danger" | "warning" | "info";
+  loading?: boolean;
+  loadingLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -22,6 +24,8 @@ const variantStyles = {
     ),
     iconBg: "bg-red-100",
     confirmBtn: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
+    confirmBtnDisabled: "bg-red-400 cursor-not-allowed",
+    progressBar: "bg-red-500",
   },
   warning: {
     icon: (
@@ -31,6 +35,8 @@ const variantStyles = {
     ),
     iconBg: "bg-amber-100",
     confirmBtn: "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500",
+    confirmBtnDisabled: "bg-amber-400 cursor-not-allowed",
+    progressBar: "bg-amber-500",
   },
   info: {
     icon: (
@@ -40,6 +46,8 @@ const variantStyles = {
     ),
     iconBg: "bg-blue-100",
     confirmBtn: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+    confirmBtnDisabled: "bg-blue-400 cursor-not-allowed",
+    progressBar: "bg-blue-500",
   },
 };
 
@@ -50,30 +58,33 @@ export default function ConfirmDialog({
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
   variant = "danger",
+  loading = false,
+  loadingLabel,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const styles = variantStyles[variant];
+  const activeLoadingLabel = loadingLabel || `${confirmLabel.replace(/e$/, "")}ing…`;
 
   useEffect(() => {
-    if (open) {
+    if (open && !loading) {
       cancelRef.current?.focus();
     }
-  }, [open]);
+  }, [open, loading]);
 
   useEffect(() => {
     if (!open) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !loading) {
         onCancel();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onCancel]);
+  }, [open, onCancel, loading]);
 
   if (!open) return null;
 
@@ -82,22 +93,63 @@ export default function ConfirmDialog({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-        onClick={onCancel}
+        onClick={loading ? undefined : onCancel}
       />
 
       {/* Dialog */}
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+        {/* Animated progress bar at the top during loading */}
+        {loading && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-200 overflow-hidden">
+            <div
+              className={`h-full ${styles.progressBar} animate-[indeterminate_1.5s_ease-in-out_infinite]`}
+            />
+          </div>
+        )}
+
         <div className="p-6">
           <div className="flex items-start gap-4">
-            {/* Icon */}
-            <div className={`flex-shrink-0 w-11 h-11 rounded-full ${styles.iconBg} flex items-center justify-center`}>
-              {styles.icon}
+            {/* Icon — pulse animation when loading */}
+            <div
+              className={`flex-shrink-0 w-11 h-11 rounded-full ${styles.iconBg} flex items-center justify-center transition-all ${
+                loading ? "animate-pulse" : ""
+              }`}
+            >
+              {loading ? (
+                <svg
+                  className="w-6 h-6 animate-spin text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              ) : (
+                styles.icon
+              )}
             </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 leading-6">{title}</h3>
-              <p className="mt-2 text-sm text-gray-500 leading-relaxed">{message}</p>
+              <h3 className="text-lg font-semibold text-gray-900 leading-6">
+                {loading ? activeLoadingLabel : title}
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                {loading
+                  ? "Please wait while we process your request. This may take a moment…"
+                  : message}
+              </p>
             </div>
           </div>
         </div>
@@ -107,18 +159,65 @@ export default function ConfirmDialog({
           <button
             ref={cancelRef}
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition"
+            disabled={loading}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 ${
+              loading
+                ? "text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed"
+                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+            }`}
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition ${styles.confirmBtn}`}
+            disabled={loading}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition inline-flex items-center gap-2 ${
+              loading ? styles.confirmBtnDisabled : styles.confirmBtn
+            }`}
           >
-            {confirmLabel}
+            {loading && (
+              <svg
+                className="w-4 h-4 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            )}
+            {loading ? activeLoadingLabel : confirmLabel}
           </button>
         </div>
       </div>
+
+      {/* Keyframe for the indeterminate progress bar */}
+      <style jsx>{`
+        @keyframes indeterminate {
+          0% {
+            transform: translateX(-100%);
+            width: 40%;
+          }
+          50% {
+            transform: translateX(60%);
+            width: 60%;
+          }
+          100% {
+            transform: translateX(200%);
+            width: 40%;
+          }
+        }
+      `}</style>
     </div>
   );
 }

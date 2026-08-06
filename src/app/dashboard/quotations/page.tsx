@@ -185,13 +185,19 @@ function QuotationsContent() {
   };
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [convertConfirmId, setConvertConfirmId] = useState<string | null>(null);
   const [activityLogModal, setActivityLogModal] = useState<{ id: string; number: string } | null>(null);
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await deleteQuotation.mutateAsync(deleteConfirmId);
-    setDeleteConfirmId(null);
+    setIsDeleting(true);
+    try {
+      await deleteQuotation.mutateAsync(deleteConfirmId);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleDuplicate = async (q: any) => {
@@ -382,8 +388,10 @@ function QuotationsContent() {
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"
+        loading={isDeleting}
+        loadingLabel="Deleting Quotation…"
         onConfirm={handleDelete}
-        onCancel={() => setDeleteConfirmId(null)}
+        onCancel={() => { if (!isDeleting) setDeleteConfirmId(null); }}
       />
       <ConfirmDialog
         open={!!convertConfirmId}

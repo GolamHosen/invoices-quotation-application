@@ -299,12 +299,18 @@ function InvoicesContent() {
   };
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activityLogModal, setActivityLogModal] = useState<{ id: string; number: string } | null>(null);
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
-    await deleteInvoice.mutateAsync(deleteConfirmId);
-    setDeleteConfirmId(null);
+    setIsDeleting(true);
+    try {
+      await deleteInvoice.mutateAsync(deleteConfirmId);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleSavePayment = async (paymentData: { amount: number; date: string; note: string }) => {
@@ -637,8 +643,10 @@ function InvoicesContent() {
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"
+        loading={isDeleting}
+        loadingLabel="Deleting Invoice…"
         onConfirm={handleDelete}
-        onCancel={() => setDeleteConfirmId(null)}
+        onCancel={() => { if (!isDeleting) setDeleteConfirmId(null); }}
       />
       {activityLogModal && (
         <ActivityLogModal
