@@ -767,4 +767,6 @@ export async function logDocumentCreation({
   } catch (error) {
     console.error("Failed to log creation:", error);
     return null;
-  }
+  }
+}
+
