@@ -8,6 +8,8 @@ export default function NewQuotationPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
   const [step, setStep] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveType, setSaveType] = useState<"draft" | "sent" | null>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -161,40 +163,49 @@ export default function NewQuotationPage() {
   const gstAmount = subtotal * (gstRate / 100);
   const totalAmount = subtotal + gstAmount;
 
-  const handleSubmit = async (status: string) => {
-    const project = projects.find((p: any) => p.id === form.projectId);
-    const createResp = await fetch("/api/quotations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        companyId: activeCompanyId,
-        status,
-        subtotal,
-        gstAmount,
-        totalAmount,
-        projectType: project?.type,
-      }),
-    });
-
-    if (!createResp.ok) {
-      const err = await createResp.json().catch(() => ({}));
-      console.error("Quotation create failed:", createResp.status, err);
-      return;
-    }
-
-    const created = await createResp.json().catch(() => null);
-    const createdId = created?.id || created?._id;
-
-    if (status === "sent" && createdId) {
-      await fetch(`/api/quotations/${encodeURIComponent(createdId)}/send-email`, {
+  const handleSubmit = async (status: "draft" | "sent") => {
+    setIsSaving(true);
+    setSaveType(status);
+    try {
+      const project = projects.find((p: any) => p.id === form.projectId);
+      const createResp = await fetch("/api/quotations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          ...form,
+          companyId: activeCompanyId,
+          status,
+          subtotal,
+          gstAmount,
+          totalAmount,
+          projectType: project?.type,
+        }),
       });
-    }
 
-    router.push("/dashboard/quotations");
+      if (!createResp.ok) {
+        const err = await createResp.json().catch(() => ({}));
+        console.error("Quotation create failed:", createResp.status, err);
+        return;
+      }
+
+      const created = await createResp.json().catch(() => null);
+      const createdId = created?.id || created?._id;
+
+      if (status === "sent" && createdId) {
+        await fetch(`/api/quotations/${encodeURIComponent(createdId)}/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      }
+
+      router.push("/dashboard/quotations");
+    } catch (error) {
+      console.error("Failed to save quotation:", error);
+    } finally {
+      setIsSaving(false);
+      setSaveType(null);
+    }
   };
 
   const steps = [
@@ -541,8 +552,28 @@ export default function NewQuotationPage() {
           <div className="flex justify-between">
             <button onClick={() => setStep(4)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">← Back</button>
             <div className="flex gap-2">
-              <button onClick={() => handleSubmit("draft")} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Save as Draft</button>
-              <button onClick={() => handleSubmit("sent")} className="px-6 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#152b48]">Save & Send</button>
+              <button
+                onClick={() => handleSubmit("draft")}
+                disabled={isSaving}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+              >
+                {isSaving && saveType === "draft" ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div> Saving...</>
+                ) : (
+                  <>Save as Draft</>
+                )}
+              </button>
+              <button
+                onClick={() => handleSubmit("sent")}
+                disabled={isSaving}
+                className="px-6 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm hover:bg-[#152b48] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+              >
+                {isSaving && saveType === "sent" ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Sending...</>
+                ) : (
+                  <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>Save & Send</>
+                )}
+              </button>
             </div>
           </div>
         </div>
