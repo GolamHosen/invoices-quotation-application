@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/db";
 import { Company } from "@/db/schema";
-import {
-  getInvoices,
-  createInvoice,
-  getClientById,
-  getProjectById,
-  getQuotationById,
-} from "@/lib/turso-store";
+import { getInvoices, createInvoice } from "@/lib/turso-store";
 import { generateId, generateInvoiceNumber } from "@/lib/utils";
 import { logDocumentCreation } from "@/lib/audit";
 
@@ -20,6 +14,8 @@ export async function GET(req: NextRequest) {
     const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
     const limit = parseInt(req.nextUrl.searchParams.get("limit") || "10", 10);
 
+    // getInvoices now uses SQL JOINs to resolve client/project names
+    // in a single batched query — no N+1 lookups needed
     const { data: invoices, total, totalPages } = await getInvoices({
       companyId,
       clientId,
@@ -34,50 +30,8 @@ export async function GET(req: NextRequest) {
       filteredInvoices = invoices.filter((inv: any) => inv.status !== "paid");
     }
 
-    const clientMap = new Map();
-    const clientEmailMap = new Map();
-    const projectMap = new Map();
-    const quotationNumberMap = new Map();
-
-    const clientIds = [...new Set(filteredInvoices.map((inv: any) => inv.clientId))];
-    const projectIds = [...new Set(filteredInvoices.map((inv: any) => inv.projectId))];
-    const invoiceQuotationIds = [...new Set(filteredInvoices.map((inv: any) => inv.quotationId).filter(Boolean))];
-
-    await Promise.all([
-      ...clientIds.map(async (cId) => {
-        if (cId) {
-          const client = await getClientById(cId);
-          if (client) {
-            clientMap.set(cId, client.name);
-            clientEmailMap.set(cId, client.email || null);
-          }
-        }
-      }),
-      ...projectIds.map(async (pId) => {
-        if (pId) {
-          const project = await getProjectById(pId);
-          if (project) projectMap.set(pId, project.name);
-        }
-      }),
-      ...invoiceQuotationIds.map(async (qId) => {
-        if (qId) {
-          const quotation = await getQuotationById(qId);
-          if (quotation) quotationNumberMap.set(qId, quotation.quotationNumber);
-        }
-      }),
-    ]);
-
-    const result = filteredInvoices.map((inv: any) => ({
-      ...inv,
-      clientName: clientMap.get(inv.clientId) || null,
-      clientEmail: clientEmailMap.get(inv.clientId) || null,
-      projectName: projectMap.get(inv.projectId) || null,
-      quotationNumber: inv.quotationId ? quotationNumberMap.get(inv.quotationId) || null : null,
-      quotationId: inv.quotationId || null,
-    }));
-
     return NextResponse.json({
-      data: result,
+      data: filteredInvoices,
       total,
       page,
       totalPages,
@@ -87,6 +41,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
 
 export async function POST(req: NextRequest) {
   try {

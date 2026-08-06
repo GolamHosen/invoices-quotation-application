@@ -336,39 +336,52 @@ export async function getQuotations(params: {
   const args: any[] = [];
 
   if (companyId) {
-    conditions.push("company_id = ?");
+    conditions.push("q.company_id = ?");
     args.push(companyId);
   }
   if (clientId) {
-    conditions.push("client_id = ?");
+    conditions.push("q.client_id = ?");
     args.push(clientId);
   }
   if (projectId) {
-    conditions.push("project_id = ?");
+    conditions.push("q.project_id = ?");
     args.push(projectId);
   }
   if (status) {
-    conditions.push("status = ?");
+    conditions.push("q.status = ?");
     args.push(status);
   }
 
   const whereClause = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
 
-  // Count query
-  const countRes = await turso.execute({
-    sql: `SELECT COUNT(*) as count FROM quotations${whereClause}`,
-    args,
-  });
-  const total = Number(countRes.rows[0]?.count ?? 0);
-
-  // Paginated query
+  // Run count + data in parallel via batch for a single round-trip
   const offset = (page - 1) * limit;
-  const dataRes = await turso.execute({
-    sql: `SELECT * FROM quotations${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    args: [...args, limit, offset],
-  });
+  const [countRes, dataRes] = await turso.batch(
+    [
+      {
+        sql: `SELECT COUNT(*) as count FROM quotations q${whereClause}`,
+        args,
+      },
+      {
+        sql: `SELECT q.*, c.name as client_name, c.email as client_email, p.name as project_name
+              FROM quotations q
+              LEFT JOIN clients c ON q.client_id = c.id
+              LEFT JOIN projects p ON q.project_id = p.id
+              ${whereClause}
+              ORDER BY q.created_at DESC LIMIT ? OFFSET ?`,
+        args: [...args, limit, offset],
+      },
+    ],
+    "read"
+  );
 
-  const data = dataRes.rows.map(mapRowToQuotation);
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const data = dataRes.rows.map((row: any) => ({
+    ...mapRowToQuotation(row),
+    clientName: row.client_name ? String(row.client_name) : null,
+    clientEmail: row.client_email ? String(row.client_email) : null,
+    projectName: row.project_name ? String(row.project_name) : null,
+  }));
   const totalPages = Math.ceil(total / limit);
 
   return { data, total, page, limit, totalPages };
@@ -488,41 +501,56 @@ export async function getInvoices(params: {
   const args: any[] = [];
 
   if (companyId) {
-    conditions.push("company_id = ?");
+    conditions.push("i.company_id = ?");
     args.push(companyId);
   }
   if (clientId) {
-    conditions.push("client_id = ?");
+    conditions.push("i.client_id = ?");
     args.push(clientId);
   }
   if (projectId) {
-    conditions.push("project_id = ?");
+    conditions.push("i.project_id = ?");
     args.push(projectId);
   }
   if (quotationId) {
-    conditions.push("quotation_id = ?");
+    conditions.push("i.quotation_id = ?");
     args.push(quotationId);
   }
   if (status) {
-    conditions.push("status = ?");
+    conditions.push("i.status = ?");
     args.push(status);
   }
 
   const whereClause = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
 
-  const countRes = await turso.execute({
-    sql: `SELECT COUNT(*) as count FROM invoices${whereClause}`,
-    args,
-  });
-  const total = Number(countRes.rows[0]?.count ?? 0);
-
+  // Run count + data in parallel via batch for a single round-trip
   const offset = (page - 1) * limit;
-  const dataRes = await turso.execute({
-    sql: `SELECT * FROM invoices${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    args: [...args, limit, offset],
-  });
+  const [countRes, dataRes] = await turso.batch(
+    [
+      {
+        sql: `SELECT COUNT(*) as count FROM invoices i${whereClause}`,
+        args,
+      },
+      {
+        sql: `SELECT i.*, c.name as client_name, c.email as client_email, p.name as project_name
+              FROM invoices i
+              LEFT JOIN clients c ON i.client_id = c.id
+              LEFT JOIN projects p ON i.project_id = p.id
+              ${whereClause}
+              ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
+        args: [...args, limit, offset],
+      },
+    ],
+    "read"
+  );
 
-  const data = dataRes.rows.map(mapRowToInvoice);
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const data = dataRes.rows.map((row: any) => ({
+    ...mapRowToInvoice(row),
+    clientName: row.client_name ? String(row.client_name) : null,
+    clientEmail: row.client_email ? String(row.client_email) : null,
+    projectName: row.project_name ? String(row.project_name) : null,
+  }));
   const totalPages = Math.ceil(total / limit);
 
   return { data, total, page, limit, totalPages };

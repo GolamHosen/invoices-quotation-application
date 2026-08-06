@@ -1,6 +1,14 @@
 import nodemailer from "nodemailer";
 import { connectDb } from "@/db";
-import { Quotation, Invoice, Client, Project, Company, EmailLog } from "@/db/schema";
+import { Company, EmailLog } from "@/db/schema";
+import {
+  getQuotationById,
+  getInvoiceById,
+  getClientById,
+  getProjectById,
+  updateQuotation,
+  updateInvoice,
+} from "@/lib/turso-store";
 import { generateQuotationPdf, generateInvoicePdf } from "@/lib/pdf";
 import { formatDate, PROJECT_TYPES, generateId } from "@/lib/utils";
 import { getLogoDataUrl } from "@/lib/ensure-logo";
@@ -64,12 +72,12 @@ export async function sendQuotationEmail(
 ): Promise<{ success: boolean; sentTo: string }> {
   await connectDb();
 
-  const q = await Quotation.findOne({ _id: quotationId }).lean();
+  const q = await getQuotationById(quotationId);
   if (!q) throw new Error("Quotation not found");
 
   const [client, project, settings] = await Promise.all([
-    Client.findOne({ _id: q.clientId }).lean(),
-    Project.findOne({ _id: q.projectId }).lean(),
+    getClientById(q.clientId),
+    getProjectById(q.projectId),
     Company.findOne({ _id: q.companyId }).lean(),
   ]);
 
@@ -159,7 +167,7 @@ export async function sendQuotationEmail(
 
     // Update status to "sent" if currently "draft"
     if (q.status === "draft") {
-      await Quotation.findByIdAndUpdate(quotationId, { status: "sent", updatedAt: new Date() });
+      await updateQuotation(quotationId, { status: "sent" });
     }
 
     // Log to EmailLog
@@ -203,12 +211,12 @@ export async function sendInvoiceEmail(
 ): Promise<{ success: boolean; sentTo: string }> {
   await connectDb();
 
-  const inv = await Invoice.findOne({ _id: invoiceId }).lean();
+  const inv = await getInvoiceById(invoiceId);
   if (!inv) throw new Error("Invoice not found");
 
   const [client, project, settings] = await Promise.all([
-    Client.findOne({ _id: inv.clientId }).lean(),
-    Project.findOne({ _id: inv.projectId }).lean(),
+    getClientById(inv.clientId),
+    getProjectById(inv.projectId),
     Company.findOne({ _id: inv.companyId }).lean(),
   ]);
 
@@ -302,7 +310,7 @@ export async function sendInvoiceEmail(
 
     // Update status to "sent" if currently "draft"
     if (inv.status === "draft") {
-      await Invoice.findByIdAndUpdate(invoiceId, { status: "sent", updatedAt: new Date() });
+      await updateInvoice(invoiceId, { status: "sent" });
     }
 
     // Log to EmailLog
