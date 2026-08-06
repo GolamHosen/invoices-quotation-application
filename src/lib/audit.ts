@@ -470,7 +470,7 @@ export function generateSummary(changes: IAuditChange[]): string {
 /**
  * Get the current session user info for audit logging.
  */
-async function getCurrentUser() {
+async function getCurrentUser(): Promise<{ id: string; email: string; name: string; role: string } | null> {
   try {
     const session = await getSession();
     return session
