@@ -474,7 +474,7 @@ async function getCurrentUser() {
   try {
     const session = await getSession();
     return session
-      ? { id: session.id, email: session.email, name: session.email }
+      ? { id: session.id, email: session.email, name: session.email, role: session.role }
       : null;
   } catch {
     return null;
